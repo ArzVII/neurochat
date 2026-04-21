@@ -110,49 +110,6 @@ const SUGGESTED_REPLIES = {
   ],
 };
 
-const AI_RESPONSES = {
-  "work-intro": [
-    "Oh nice! Welcome to the team. What department are you in?",
-    "That's great — I remember my first week, it's a lot to take in! Have they shown you where the good coffee is yet?",
-    "Well, if you need anything, don't hesitate to ask. We're a pretty friendly bunch here.",
-  ],
-  "job-interview": [
-    "That's really interesting. And what made you apply for this particular role?",
-    "Great. Can you tell me about a time you worked well in a team?",
-    "Lovely. And where do you see yourself in a couple of years?",
-  ],
-  "small-talk": [
-    "Oh nice! Yeah I just caught up on some TV, nothing exciting. Are you working on anything interesting this week?",
-    "That sounds lovely. I keep meaning to do more of that! Anyway, how's your project going?",
-    "Same here — sometimes the quiet ones are the best. Right, I'd better grab my coffee and get to it!",
-  ],
-  "meeting-new": [
-    "Oh cool! Small world. Are you from around here originally?",
-    "Nice one! This is a good turnout isn't it? Have you tried the food yet?",
-    "Ah that's great. So what do you do for work, if you don't mind me asking?",
-  ],
-  "asking-help": [
-    "Of course, no problem at all. What bit are you stuck on?",
-    "Yeah, that one trips everyone up at first. Let me show you — it's actually quite simple once you see it.",
-    "Happy to help! Here's what I'd suggest...",
-  ],
-  "handling-conflict": [
-    "I appreciate you saying that. I think the main thing was that I felt my point got talked over in the meeting.",
-    "Yeah, I think a misunderstanding is probably what happened. I just want us to be on the same page.",
-    "Thanks — I feel better already. Let's just agree to flag things sooner next time, yeah?",
-  ],
-  "phone-call": [
-    "Of course. Can I take your full name and date of birth please?",
-    "Sure, I can help with that. Let me just pull up the system. Bear with me one moment.",
-    "Perfect, I've got that booked in for you. Is there anything else I can help with?",
-  ],
-  "ending-convo": [
-    "Yeah no worries! It was really good to see you. Take care!",
-    "Definitely! Let's sort something out soon. Have a good evening!",
-    "You too! See you around.",
-  ],
-};
-
 const TIPS_DATA = [
   {
     category: "Starting Conversations",
@@ -293,6 +250,7 @@ export default function NeuroChat() {
   const [completedScenarios, setCompletedScenarios] = useState([]);
   const [earnedBadges, setEarnedBadges] = useState([]);
   const [typing, setTyping] = useState(false);
+  const [chatError, setChatError] = useState("");
   const [selectedTipCategory, setSelectedTipCategory] = useState(null);
   const chatEndRef = useRef(null);
   const maxTurns = 4;
@@ -307,15 +265,17 @@ export default function NeuroChat() {
     setTurnCount(0);
     setShowSuggestion(false);
     setFeedback(null);
+    setChatError("");
     setScreen("chat");
   };
 
-  const sendMessage = () => {
+  const sendMessage = async () => {
     if (!userInput.trim()) return;
     const newMessages = [...messages, { sender: "user", text: userInput.trim() }];
     setMessages(newMessages);
     setUserInput("");
     setShowSuggestion(false);
+    setChatError("");
     const newTurn = turnCount + 1;
     setTurnCount(newTurn);
 
@@ -337,12 +297,35 @@ export default function NeuroChat() {
       }, 800);
     } else {
       setTyping(true);
-      setTimeout(() => {
-        const responses = AI_RESPONSES[selectedScenario.id] || ["That's interesting, tell me more."];
-        const aiReply = responses[Math.min(newTurn - 1, responses.length - 1)];
+      try {
+        const response = await fetch("/api/conversation", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            scenario: selectedScenario,
+            messages: newMessages,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error("Conversation API request failed");
+        }
+
+        const data = await response.json();
+        const aiReply = data.reply?.trim();
+        if (!aiReply) {
+          throw new Error("Conversation API returned empty response");
+        }
+
         setMessages((prev) => [...prev, { sender: "ai", text: aiReply }]);
+      } catch (error) {
+        console.error(error);
+        setChatError("I couldn't reply just now. Please try sending your message again.");
+      } finally {
         setTyping(false);
-      }, 1200 + Math.random() * 800);
+      }
     }
   };
 
@@ -492,6 +475,22 @@ export default function NeuroChat() {
             )}
             <div ref={chatEndRef} />
           </div>
+          {chatError && (
+            <div
+              style={{
+                fontFamily: "'Nunito', sans-serif",
+                fontSize: 13,
+                color: "#9C4221",
+                background: colors.amberLight,
+                border: `1px solid ${colors.amberBorder}`,
+                borderRadius: 10,
+                padding: "8px 12px",
+                marginBottom: 10,
+              }}
+            >
+              {chatError}
+            </div>
+          )}
 
           {/* Suggestion */}
           {showSuggestion && currentSuggestion && (
