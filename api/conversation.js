@@ -1,20 +1,4 @@
-import express from "express";
-import dotenv from "dotenv";
 import Anthropic from "@anthropic-ai/sdk";
-
-dotenv.config();
-
-const app = express();
-const port = process.env.PORT || 8787;
-const apiKey = process.env.ANTHROPIC_API_KEY;
-
-if (!apiKey) {
-  console.warn("Missing ANTHROPIC_API_KEY in .env. Claude requests will fail until it is set.");
-}
-
-const anthropic = new Anthropic({ apiKey });
-
-app.use(express.json());
 
 function buildSystemPrompt(scenario) {
   return [
@@ -42,14 +26,25 @@ function toClaudeMessages(messages) {
     }));
 }
 
-app.post("/api/conversation", async (req, res) => {
+export default async function handler(req, res) {
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
   try {
-    const { scenario, messages } = req.body ?? {};
+    const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body ?? {};
+    const { scenario, messages } = body;
 
     if (!scenario || !Array.isArray(messages) || messages.length === 0) {
       return res.status(400).json({ error: "scenario and non-empty messages[] are required" });
     }
 
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({ error: "Server missing ANTHROPIC_API_KEY" });
+    }
+
+    const anthropic = new Anthropic({ apiKey });
     const claudeResponse = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
       max_tokens: 400,
@@ -67,13 +62,9 @@ app.post("/api/conversation", async (req, res) => {
       return res.status(502).json({ error: "Claude returned an empty response" });
     }
 
-    return res.json({ reply: text });
+    return res.status(200).json({ reply: text });
   } catch (error) {
     console.error("Conversation endpoint failed:", error);
     return res.status(500).json({ error: "Failed to generate conversation response" });
   }
-});
-
-app.listen(port, () => {
-  console.log(`NeuroChat API listening on http://localhost:${port}`);
-});
+}

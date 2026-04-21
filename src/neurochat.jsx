@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 
+const CONVERSATION_ENDPOINT = "/api/conversation";
+
 const SCENARIOS = [
   {
     id: "work-intro",
@@ -298,7 +300,7 @@ export default function NeuroChat() {
     } else {
       setTyping(true);
       try {
-        const response = await fetch("/api/conversation", {
+        const response = await fetch(CONVERSATION_ENDPOINT, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
