@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 
 const CONVERSATION_ENDPOINT = "/api/conversation";
+const FEEDBACK_ENDPOINT = "/api/feedback";
 
 const SCENARIOS = [
   {
@@ -169,42 +170,12 @@ const BADGES = [
   { id: "all-cats", icon: "🎯", name: "Explorer", desc: "Tried scenarios from every category" },
 ];
 
-function generateFeedback(messages, scenario) {
+function derivePracticeSignals(messages) {
   const userMsgs = messages.filter((m) => m.sender === "user");
   const avgLen = userMsgs.reduce((a, m) => a + m.text.length, 0) / (userMsgs.length || 1);
   const hasQuestion = userMsgs.some((m) => m.text.includes("?"));
   const hasDetail = avgLen > 40;
-
-  const strengths = [];
-  const explore = [];
-  const examples = [];
-
-  strengths.push("You engaged with the conversation and kept it going — that takes courage.");
-  if (hasQuestion) strengths.push("You asked a question back, which shows interest and keeps the chat flowing.");
-  if (hasDetail) strengths.push("You added nice detail to your responses, making it easier for the other person to reply.");
-  if (userMsgs.length >= 3) strengths.push("You stayed in the conversation for multiple turns — great stamina!");
-
-  if (!hasQuestion) {
-    explore.push("Try asking a question back next time — even a simple 'How about you?' keeps things balanced.");
-  }
-  if (!hasDetail) {
-    explore.push("Your replies were quite short. Adding a small detail (like 'I just started last week') gives the other person more to work with.");
-  }
-  if (avgLen > 120) {
-    explore.push("Your responses were quite long. Shorter replies can feel more natural in casual chat — try keeping it to 1–2 sentences.");
-  }
-
-  const scenarioSuggestions = SUGGESTED_REPLIES[scenario.id] || [];
-  if (scenarioSuggestions.length > 0) {
-    examples.push(...scenarioSuggestions.slice(0, 2));
-  }
-
-  const earnedBadges = [];
-  if (userMsgs.length >= 1) earnedBadges.push("first-chat");
-  if (hasQuestion) earnedBadges.push("followup");
-  if (hasDetail) earnedBadges.push("listener");
-
-  return { strengths, explore, examples, earnedBadges };
+  return { userMsgs, hasQuestion, hasDetail };
 }
 
 // ─── STYLES ───
@@ -253,6 +224,7 @@ export default function NeuroChat() {
   const [earnedBadges, setEarnedBadges] = useState([]);
   const [typing, setTyping] = useState(false);
   const [chatError, setChatError] = useState("");
+  const [feedbackLoading, setFeedbackLoading] = useState(false);
   const [selectedTipCategory, setSelectedTipCategory] = useState(null);
   const chatEndRef = useRef(null);
   const maxTurns = 4;
@@ -268,6 +240,7 @@ export default function NeuroChat() {
     setShowSuggestion(false);
     setFeedback(null);
     setChatError("");
+    setFeedbackLoading(false);
     setScreen("chat");
   };
 
@@ -282,21 +255,56 @@ export default function NeuroChat() {
     setTurnCount(newTurn);
 
     if (newTurn >= maxTurns) {
-      setTimeout(() => {
-        const fb = generateFeedback(newMessages, selectedScenario);
-        setFeedback(fb);
+      setFeedbackLoading(true);
+      try {
+        const response = await fetch(FEEDBACK_ENDPOINT, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            scenario: selectedScenario,
+            messages: newMessages,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error("Feedback API request failed");
+        }
+
+        const aiFeedback = await response.json();
+        setFeedback({
+          strengths: Array.isArray(aiFeedback.strengths) ? aiFeedback.strengths : [],
+          explore: Array.isArray(aiFeedback.explore) ? aiFeedback.explore : [],
+          examples: Array.isArray(aiFeedback.examples) ? aiFeedback.examples : [],
+        });
+      } catch (error) {
+        console.error(error);
+        const fallbackExamples = (SUGGESTED_REPLIES[selectedScenario?.id] || []).slice(0, 2);
+        setFeedback({
+          strengths: ["You showed up and practised a real conversation - that is meaningful progress."],
+          explore: ["Feedback is temporarily unavailable. Try again in a moment for detailed coaching insights."],
+          examples: fallbackExamples,
+        });
+      } finally {
+        const { userMsgs, hasQuestion, hasDetail } = derivePracticeSignals(newMessages);
         if (!completedScenarios.includes(selectedScenario.id)) {
           setCompletedScenarios((prev) => [...prev, selectedScenario.id]);
         }
-        const newBadges = [...new Set([...earnedBadges, ...fb.earnedBadges])];
+        const earnedFromSignals = [];
+        if (userMsgs.length >= 1) earnedFromSignals.push("first-chat");
+        if (hasQuestion) earnedFromSignals.push("followup");
+        if (hasDetail) earnedFromSignals.push("listener");
+        const newBadges = [...new Set([...earnedBadges, ...earnedFromSignals])];
         const completedCount = completedScenarios.length + 1;
         if (completedCount >= 3 && !newBadges.includes("three-done")) newBadges.push("three-done");
         if (completedCount >= 5 && !newBadges.includes("five-done")) newBadges.push("five-done");
         const cats = new Set(SCENARIOS.filter((s) => [...completedScenarios, selectedScenario.id].includes(s.id)).map((s) => s.category));
         if (cats.size >= 4 && !newBadges.includes("all-cats")) newBadges.push("all-cats");
         setEarnedBadges(newBadges);
+        setFeedbackLoading(false);
         setScreen("feedback");
-      }, 800);
+      }
     } else {
       setTyping(true);
       try {
@@ -525,6 +533,7 @@ export default function NeuroChat() {
                 onKeyDown={handleKeyDown}
                 placeholder="Type your reply..."
                 rows={2}
+                disabled={feedbackLoading}
                 style={{
                   flex: 1,
                   fontFamily: "'Nunito', sans-serif",
@@ -541,10 +550,10 @@ export default function NeuroChat() {
               />
               <button
                 onClick={sendMessage}
-                disabled={!userInput.trim()}
+                disabled={!userInput.trim() || feedbackLoading}
                 style={{
                   ...baseBtn,
-                  background: userInput.trim() ? colors.primary : colors.border,
+                  background: userInput.trim() && !feedbackLoading ? colors.primary : colors.border,
                   color: "#fff",
                   width: 48,
                   height: 48,
@@ -559,6 +568,11 @@ export default function NeuroChat() {
                 ▶
               </button>
             </div>
+            {feedbackLoading && (
+              <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 13, color: colors.textMuted, marginTop: 8 }}>
+                Generating your feedback...
+              </div>
+            )}
           </div>
         </div>
       </div>
