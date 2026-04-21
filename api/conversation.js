@@ -1,5 +1,3 @@
-import Anthropic from "@anthropic-ai/sdk";
-
 function buildSystemPrompt(scenario) {
   return [
     "You are roleplaying as the other person in a NeuroChat social-practice scenario.",
@@ -44,13 +42,28 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: "Server missing ANTHROPIC_API_KEY" });
     }
 
-    const anthropic = new Anthropic({ apiKey });
-    const claudeResponse = await anthropic.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 400,
-      system: buildSystemPrompt(scenario),
-      messages: toClaudeMessages(messages),
+    const anthropicResponse = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 400,
+        system: buildSystemPrompt(scenario),
+        messages: toClaudeMessages(messages),
+      }),
     });
+
+    if (!anthropicResponse.ok) {
+      const errorText = await anthropicResponse.text();
+      console.error("Anthropic API error:", errorText);
+      return res.status(502).json({ error: "Anthropic API request failed" });
+    }
+
+    const claudeResponse = await anthropicResponse.json();
 
     const text = claudeResponse.content
       ?.filter((part) => part.type === "text")
