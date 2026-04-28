@@ -218,7 +218,6 @@ const baseBtn = {
 
 export default function NeuroChat() {
   const [isBootstrapping, setIsBootstrapping] = useState(true);
-  const [authMode, setAuthMode] = useState("entry");
   const [emailInput, setEmailInput] = useState("");
   const [authNotice, setAuthNotice] = useState("");
   const [authUser, setAuthUser] = useState(null);
@@ -239,6 +238,7 @@ export default function NeuroChat() {
   const [mood, setMood] = useState(null);
   const [moodHistory, setMoodHistory] = useState([]);
   const [hasOnboarded, setHasOnboarded] = useState(false);
+  const [hasChosenGuest, setHasChosenGuest] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState(0);
   const [sessionSaving, setSessionSaving] = useState(false);
   const chatEndRef = useRef(null);
@@ -262,6 +262,7 @@ export default function NeuroChat() {
       setMood(parsed.mood ?? null);
       setMoodHistory(Array.isArray(parsed.moodHistory) ? parsed.moodHistory : []);
       setHasOnboarded(Boolean(parsed.hasOnboarded));
+      setHasChosenGuest(Boolean(parsed.hasChosenGuest));
       return parsed;
     } catch (error) {
       console.error("Failed to load guest state:", error);
@@ -277,6 +278,7 @@ export default function NeuroChat() {
       mood,
       moodHistory,
       hasOnboarded,
+      hasChosenGuest,
       ...overrides,
     };
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -311,15 +313,21 @@ export default function NeuroChat() {
       mood,
       moodHistory,
       hasOnboarded,
+      hasChosenGuest,
     };
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  }, [completedScenarios, earnedBadges, mood, moodHistory, hasOnboarded, isGuest]);
+  }, [completedScenarios, earnedBadges, mood, moodHistory, hasOnboarded, hasChosenGuest, isGuest]);
 
   useEffect(() => {
     if (!isSupabaseConfigured()) {
       const guestState = loadGuestState();
-      setAuthMode("guest");
-      setScreen(guestState?.hasOnboarded ? "mood-checkin" : "onboarding");
+      if (!guestState?.hasOnboarded) {
+        setScreen("onboarding");
+      } else if (guestState?.hasChosenGuest) {
+        setScreen("mood-checkin");
+      } else {
+        setScreen("auth-choice");
+      }
       setIsBootstrapping(false);
       return;
     }
@@ -329,10 +337,15 @@ export default function NeuroChat() {
       if (!active) return;
       const sessionUser = data.session?.user ?? null;
       if (!sessionUser) {
-        loadGuestState();
-        setAuthMode("entry");
+        const guestState = loadGuestState();
         setIsGuest(true);
-        setScreen("home");
+        if (!guestState?.hasOnboarded) {
+          setScreen("onboarding");
+        } else if (guestState?.hasChosenGuest) {
+          setScreen("mood-checkin");
+        } else {
+          setScreen("auth-choice");
+        }
         setIsBootstrapping(false);
         return;
       }
@@ -354,7 +367,6 @@ export default function NeuroChat() {
       setCompletedScenarios(Array.isArray(progress?.completed_scenarios) ? progress.completed_scenarios : []);
       setEarnedBadges(Array.isArray(progress?.earned_badges) ? progress.earned_badges : []);
       setScreen(profile?.has_onboarded ? "mood-checkin" : "onboarding");
-      setAuthMode("authenticated");
       setIsBootstrapping(false);
     });
 
@@ -374,9 +386,11 @@ export default function NeuroChat() {
 
   const enterGuestMode = () => {
     setIsGuest(true);
-    setAuthMode("guest");
+    setHasChosenGuest(true);
     const guestState = loadGuestState();
-    setScreen(guestState?.hasOnboarded ? "mood-checkin" : "onboarding");
+    const onboarded = guestState?.hasOnboarded ?? hasOnboarded;
+    setScreen(onboarded ? "mood-checkin" : "onboarding");
+    saveGuestState({ hasChosenGuest: true, hasOnboarded: onboarded });
   };
 
   const sendMagicLink = async () => {
@@ -571,7 +585,11 @@ export default function NeuroChat() {
         onboarded: true,
       });
     }
-    setScreen("mood-checkin");
+    if (authUser) {
+      setScreen("mood-checkin");
+      return;
+    }
+    setScreen("auth-choice");
   };
 
   const handleSignOut = async () => {
@@ -579,22 +597,22 @@ export default function NeuroChat() {
     await supabase.auth.signOut();
     setAuthUser(null);
     setIsGuest(true);
-    setAuthMode("entry");
+    setHasChosenGuest(false);
     setCompletedScenarios([]);
     setEarnedBadges([]);
     setMood(null);
     setMoodHistory([]);
     setHasOnboarded(false);
-    setScreen("home");
+    setScreen("auth-choice");
   };
 
-  const renderEntry = () => (
+  const renderAuthChoice = () => (
     <div style={{ minHeight: "100vh", background: colors.bg, display: "flex", justifyContent: "center" }}>
       <div style={{ width: "100%", maxWidth: 420, padding: "48px 20px 40px" }}>
         <div style={{ textAlign: "center", marginBottom: 20 }}>
           <div style={{ fontSize: 48, marginBottom: 8 }}>🧠</div>
           <h1 style={{ fontFamily: "'Nunito', sans-serif", fontSize: 32, color: colors.primaryDark, margin: 0 }}>NeuroChat</h1>
-          <p style={{ fontFamily: "'Nunito', sans-serif", fontSize: 15, color: colors.textMuted, marginTop: 8 }}>Sign in with magic link or continue as guest.</p>
+          <p style={{ fontFamily: "'Nunito', sans-serif", fontSize: 15, color: colors.textMuted, marginTop: 8 }}>Choose how you want to continue.</p>
         </div>
         <div style={{ background: colors.card, border: `1px solid ${colors.border}`, borderRadius: 16, padding: 20 }}>
           <input
@@ -603,7 +621,7 @@ export default function NeuroChat() {
             placeholder="you@example.com"
             style={{ width: "100%", boxSizing: "border-box", fontFamily: "'Nunito', sans-serif", fontSize: 15, borderRadius: 12, border: `1px solid ${colors.border}`, padding: "12px 14px", marginBottom: 10 }}
           />
-          <button onClick={sendMagicLink} style={{ ...baseBtn, width: "100%", background: colors.primary, color: "#fff", padding: "14px 16px", fontSize: 15 }}>Send Magic Link</button>
+          <button onClick={sendMagicLink} style={{ ...baseBtn, width: "100%", background: colors.primary, color: "#fff", padding: "14px 16px", fontSize: 15 }}>Sign up with email</button>
           {authNotice && <p style={{ fontFamily: "'Nunito', sans-serif", fontSize: 13, color: colors.textMuted, marginTop: 10 }}>{authNotice}</p>}
           <button onClick={enterGuestMode} style={{ ...baseBtn, width: "100%", marginTop: 10, background: colors.primaryLight, color: colors.primaryDark, padding: "14px 16px", fontSize: 15, border: `1px solid ${colors.border}` }}>Continue as guest</button>
         </div>
@@ -685,7 +703,12 @@ export default function NeuroChat() {
     <div style={{ minHeight: "100vh", background: colors.bg, display: "flex", flexDirection: "column", alignItems: "center" }}>
       <div style={{ width: "100%", maxWidth: 420, padding: "0 20px", paddingBottom: 40 }}>
         {/* Header */}
-        <div style={{ textAlign: "center", paddingTop: 60, paddingBottom: 10 }}>
+        <div style={{ display: "flex", justifyContent: "flex-end", paddingTop: 16 }}>
+          <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 12, color: colors.textMuted, border: `1px solid ${colors.border}`, borderRadius: 999, padding: "6px 10px", background: colors.card }}>
+            👤 {authUser ? "Signed in" : "Guest"}
+          </div>
+        </div>
+        <div style={{ textAlign: "center", paddingTop: 26, paddingBottom: 10 }}>
           <div style={{ fontSize: 48, marginBottom: 8 }}>🧠</div>
           <h1 style={{ fontFamily: "'Nunito', sans-serif", fontSize: 32, fontWeight: 800, color: colors.primaryDark, margin: 0, letterSpacing: -0.5 }}>
             NeuroChat
@@ -737,10 +760,10 @@ export default function NeuroChat() {
             </button>
           ) : (
             <button
-              onClick={() => setAuthMode("entry")}
+              onClick={() => setScreen("auth-choice")}
               style={{ ...baseBtn, background: colors.card, color: colors.textMuted, padding: "14px 24px", fontSize: 14, border: `1px solid ${colors.border}` }}
             >
-              Sign in with magic link
+              Create free account
             </button>
           )}
         </div>
@@ -993,6 +1016,16 @@ export default function NeuroChat() {
           )}
 
           {/* Action buttons */}
+          {!authUser && completedScenarios.length === 1 && (
+            <div style={{ background: colors.primaryLight, border: `1px solid ${colors.border}`, borderRadius: 14, padding: "12px 14px", marginBottom: 12 }}>
+              <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 13, color: colors.primaryDark, lineHeight: 1.5 }}>
+                Want to save your progress? Create a free account.
+                <button onClick={() => setScreen("auth-choice")} style={{ ...baseBtn, background: "transparent", color: colors.primary, fontSize: 13, textDecoration: "underline", padding: 0, marginLeft: 6 }}>
+                  Sign up
+                </button>
+              </div>
+            </div>
+          )}
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <button onClick={() => startScenario(selectedScenario)} style={{ ...baseBtn, background: colors.primary, color: "#fff", padding: "16px 24px", fontSize: 16 }}>
               🔄 Try This Scenario Again
@@ -1183,8 +1216,8 @@ export default function NeuroChat() {
     <div>
       <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
       {isBootstrapping && renderHome()}
-      {!isBootstrapping && authMode === "entry" && renderEntry()}
       {!isBootstrapping && screen === "onboarding" && renderOnboarding()}
+      {!isBootstrapping && screen === "auth-choice" && renderAuthChoice()}
       {!isBootstrapping && screen === "mood-checkin" && renderMoodCheckIn()}
       {!isBootstrapping && screen === "home" && renderHome()}
       {screen === "scenarios" && renderScenarios()}
