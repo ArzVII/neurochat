@@ -1,5 +1,14 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { isSupabaseConfigured, supabase } from "./supabaseClient";
+import {
+  BADGES,
+  DIFFICULTY_LABEL,
+  migrateEarnedBadges,
+  scenarioById,
+  SCENARIOS,
+  SUGGESTED_REPLIES,
+} from "./data/scenarios";
+import { getTipsCategories } from "./data/tips";
 
 const CONVERSATION_ENDPOINT = "/api/conversation";
 const FEEDBACK_ENDPOINT = "/api/feedback";
@@ -7,172 +16,7 @@ const PROGRESS_ENDPOINT = "/api/progress/update";
 const SAVE_SESSION_ENDPOINT = "/api/sessions/save";
 const STORAGE_KEY = "neurochat_guest_state_v2";
 
-const SCENARIOS = [
-  {
-    id: "work-intro",
-    title: "Introducing Yourself at Work",
-    icon: "👋",
-    description: "You've just started a new job and a colleague approaches you.",
-    opener: "Hi, I don't think we've met before. What's your name?",
-    category: "Work",
-  },
-  {
-    id: "job-interview",
-    title: "Job Interview",
-    icon: "💼",
-    description: "You're meeting an interviewer for the first time.",
-    opener: "Welcome! Thanks for coming in. So, tell me a bit about yourself.",
-    category: "Work",
-  },
-  {
-    id: "small-talk",
-    title: "Small Talk at Work",
-    icon: "☕",
-    description: "A colleague starts chatting by the kettle.",
-    opener: "Morning! Did you have a good weekend?",
-    category: "Work",
-  },
-  {
-    id: "meeting-new",
-    title: "Meeting Someone New",
-    icon: "🤝",
-    description: "You're at a social event and someone introduces themselves.",
-    opener: "Hey! I'm Alex. I think we know some of the same people — how do you know the host?",
-    category: "Social",
-  },
-  {
-    id: "asking-help",
-    title: "Asking for Help",
-    icon: "🙋",
-    description: "You need to ask a colleague or teacher for help with something.",
-    opener: "Hey, you look like you've got a question. What's up?",
-    category: "Everyday",
-  },
-  {
-    id: "handling-conflict",
-    title: "Handling Conflict",
-    icon: "⚡",
-    description: "Someone is upset with you about something. You need to respond calmly.",
-    opener: "I'm a bit frustrated because I feel like my message wasn't heard earlier. Can we talk about it?",
-    category: "Difficult",
-  },
-  {
-    id: "phone-call",
-    title: "Making a Phone Call",
-    icon: "📞",
-    description: "You need to call to make an appointment or ask a question.",
-    opener: "Hello, you're through to the reception desk. How can I help you?",
-    category: "Everyday",
-  },
-  {
-    id: "ending-convo",
-    title: "Ending a Conversation Politely",
-    icon: "👋",
-    description: "You want to leave a conversation without being rude.",
-    opener: "So yeah, that's basically what happened! Anyway, what are you up to later?",
-    category: "Social",
-  },
-];
-
-const SUGGESTED_REPLIES = {
-  "work-intro": [
-    "Hi! I'm [name], I just started this week. Nice to meet you!",
-    "Hey, I'm [name] — I'm new here. What team are you on?",
-    "Hi, nice to meet you! I'm [name]. Still finding my way around!",
-  ],
-  "job-interview": [
-    "Thanks for having me. I'm [name], and I've been working in [field] for [time]...",
-    "Well, I'd describe myself as someone who really enjoys [interest] and that's what drew me to this role...",
-    "Sure! I've got a background in [area] and I'm really keen to bring that experience here.",
-  ],
-  "small-talk": [
-    "Yeah, it was really nice actually — just had a quiet one. How about you?",
-    "Not bad! Didn't do much but it was good to rest. You?",
-    "It was good, thanks! Went for a walk and caught up on some reading. Yours?",
-  ],
-  "meeting-new": [
-    "I went to uni with them actually! We've stayed in touch since. How about you?",
-    "We work together — they invited me along tonight. This is a great place!",
-    "We're neighbours actually! I'm [name], nice to meet you.",
-  ],
-  "asking-help": [
-    "Yeah, I'm a bit stuck with [topic]. Would you mind explaining how [specific thing] works?",
-    "I was wondering if you could show me how to do [task]? I've tried but I'm not sure I'm doing it right.",
-    "If you've got a minute, could I ask you something about [topic]? No rush if you're busy.",
-  ],
-  "handling-conflict": [
-    "I hear you, and I'm sorry you felt that way. Can you tell me more about what happened from your side?",
-    "I didn't realise it came across like that — I'd like to sort it out. What would help?",
-    "Thanks for telling me. I think there might have been a misunderstanding — can we go through it?",
-  ],
-  "phone-call": [
-    "Hi, I'm calling to make an appointment please. My name is [name].",
-    "Hello, I was wondering if you could help me with [reason for calling]?",
-    "Hi there, I need to [book/ask about something]. Is now a good time?",
-  ],
-  "ending-convo": [
-    "Not much planned! Anyway, it's been really nice chatting — I should probably head off though.",
-    "I'm not sure yet! Right, I'd better get going, but let's catch up again soon.",
-    "Good question! I'll figure it out. Anyway, I'll let you go — take care!",
-  ],
-};
-
-const TIPS_DATA = [
-  {
-    category: "Starting Conversations",
-    icon: "💬",
-    tips: [
-      { title: "Use a simple opener", body: "You don't need to be clever. 'Hi, how's it going?' works perfectly." },
-      { title: "Comment on something shared", body: "Mention something you both have in common — the weather, the event, the queue you're standing in." },
-      { title: "It's okay to say you're nervous", body: "Most people find honesty disarming. 'I'm not great at small talk but I wanted to say hi' is completely fine." },
-    ],
-  },
-  {
-    category: "Keeping It Going",
-    icon: "🔄",
-    tips: [
-      { title: "Ask open questions", body: "Instead of 'Did you have a good weekend?' try 'What did you get up to this weekend?' — it gives them more to work with." },
-      { title: "Add a little detail", body: "Instead of just 'Fine', try 'Yeah, good thanks — I tried a new café and it was really nice.' It gives the other person something to respond to." },
-      { title: "Mirror what they said", body: "If they mention something, ask a follow-up. 'Oh you went hiking? Where did you go?' shows you're listening." },
-    ],
-  },
-  {
-    category: "Ending Politely",
-    icon: "👋",
-    tips: [
-      { title: "Signal before you go", body: "Say something like 'Right, I should probably...' or 'Anyway, I'll let you get on' before wrapping up." },
-      { title: "End with warmth", body: "A small closer like 'It was really nice chatting' or 'Let's do this again' leaves a good impression." },
-      { title: "You don't need a reason", body: "You don't have to explain why you're leaving. A simple 'I'd better head off' is enough." },
-    ],
-  },
-  {
-    category: "Tone & Delivery",
-    icon: "🎯",
-    tips: [
-      { title: "Match their energy", body: "If someone's casual, be casual. If they're more formal, follow their lead. You don't have to guess — just mirror them slightly." },
-      { title: "Pauses are okay", body: "Silence feels longer to you than it does to them. A brief pause before responding is totally normal." },
-      { title: "Check your volume", body: "If you're unsure, slightly quieter is usually better than too loud. You can always ask 'Can you hear me alright?'" },
-    ],
-  },
-  {
-    category: "Difficult Moments",
-    icon: "⚡",
-    tips: [
-      { title: "It's okay to not know what to say", body: "Try: 'I'm not sure what to say right now, but I hear you.' Honesty is always better than forcing a response." },
-      { title: "Take a breath first", body: "If you feel overwhelmed, pause. One slow breath before speaking can completely change your response." },
-      { title: "You can ask for time", body: "Saying 'Can I think about that and get back to you?' is a completely valid response." },
-    ],
-  },
-];
-
-const BADGES = [
-  { id: "first-chat", icon: "✅", name: "First Conversation", desc: "Completed your first practice" },
-  { id: "three-done", icon: "🌟", name: "3 Scenarios Done", desc: "Practised 3 different scenarios" },
-  { id: "five-done", icon: "🏆", name: "5 Scenarios Done", desc: "Practised 5 different scenarios" },
-  { id: "listener", icon: "👂", name: "Good Listener", desc: "Added detail in your responses" },
-  { id: "followup", icon: "🗨️", name: "Asked a Follow-Up", desc: "Asked a question back in conversation" },
-  { id: "all-cats", icon: "🎯", name: "Explorer", desc: "Tried scenarios from every category" },
-];
+const CORE_CATEGORIES = ["Work", "Social", "Everyday", "Difficult", "Relationships", "Self-Advocacy"];
 
 function derivePracticeSignals(messages) {
   const userMsgs = messages.filter((m) => m.sender === "user");
@@ -236,15 +80,47 @@ export default function NeuroChat() {
   const [typing, setTyping] = useState(false);
   const [chatError, setChatError] = useState("");
   const [feedbackLoading, setFeedbackLoading] = useState(false);
-  const [selectedTipCategory, setSelectedTipCategory] = useState(null);
+  const [selectedTipCategoryKey, setSelectedTipCategoryKey] = useState(null);
   const [mood, setMood] = useState(null);
   const [moodHistory, setMoodHistory] = useState([]);
   const [hasOnboarded, setHasOnboarded] = useState(false);
   const [hasChosenGuest, setHasChosenGuest] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState(0);
   const [sessionSaving, setSessionSaving] = useState(false);
+  const [totalSessions, setTotalSessions] = useState(0);
+  const [unlockedContent, setUnlockedContent] = useState([]);
+  const [toastMessage, setToastMessage] = useState(null);
+  const toastTimersRef = useRef([]);
   const chatEndRef = useRef(null);
   const maxTurns = 4;
+
+  const tipsData = useMemo(() => getTipsCategories(unlockedContent), [unlockedContent]);
+
+  const visibleScenarios = useMemo(
+    () => SCENARIOS.filter((s) => !s.requiresUnlock || unlockedContent.includes(s.requiresUnlock)),
+    [unlockedContent],
+  );
+
+  const queueToasts = (messages) => {
+    if (!messages?.length) return;
+    toastTimersRef.current.forEach(clearTimeout);
+    toastTimersRef.current = [];
+    messages.forEach((msg, i) => {
+      const id = setTimeout(() => setToastMessage(msg), i * 3800);
+      toastTimersRef.current.push(id);
+    });
+    const clearId = setTimeout(() => {
+      setToastMessage(null);
+      toastTimersRef.current = [];
+    }, messages.length * 3800 + 3500);
+    toastTimersRef.current.push(clearId);
+  };
+
+  useEffect(() => {
+    return () => {
+      toastTimersRef.current.forEach(clearTimeout);
+    };
+  }, []);
 
   const moodOptions = [
     { id: "good", emoji: "😊", label: "Feeling good", bg: "#F0FFF4", border: "#9AE6B4", text: colors.green, hint: "Want to try something new today?" },
@@ -260,7 +136,9 @@ export default function NeuroChat() {
       if (!raw) return null;
       const parsed = JSON.parse(raw);
       setCompletedScenarios(Array.isArray(parsed.completedScenarios) ? parsed.completedScenarios : []);
-      setEarnedBadges(Array.isArray(parsed.earnedBadges) ? parsed.earnedBadges : []);
+      setEarnedBadges(migrateEarnedBadges(Array.isArray(parsed.earnedBadges) ? parsed.earnedBadges : []));
+      setTotalSessions(typeof parsed.totalSessions === "number" ? parsed.totalSessions : 0);
+      setUnlockedContent(Array.isArray(parsed.unlockedContent) ? parsed.unlockedContent : []);
       setMood(parsed.mood ?? null);
       setMoodHistory(Array.isArray(parsed.moodHistory) ? parsed.moodHistory : []);
       setHasOnboarded(Boolean(parsed.hasOnboarded));
@@ -281,12 +159,22 @@ export default function NeuroChat() {
       moodHistory,
       hasOnboarded,
       hasChosenGuest,
+      totalSessions,
+      unlockedContent,
       ...overrides,
     };
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   };
 
-  const syncProgressToSupabase = async ({ updatedCompleted, updatedBadges, updatedMood, updatedMoodHistory, onboarded }) => {
+  const syncProgressToSupabase = async ({
+    updatedCompleted,
+    updatedBadges,
+    updatedMood,
+    updatedMoodHistory,
+    onboarded,
+    updatedTotalSessions,
+    updatedUnlockedContent,
+  }) => {
     if (!authUser?.id) return;
     try {
       await fetch(PROGRESS_ENDPOINT, {
@@ -296,7 +184,8 @@ export default function NeuroChat() {
           userId: authUser.id,
           completedScenarios: updatedCompleted,
           earnedBadges: updatedBadges,
-          totalSessions: updatedCompleted.length,
+          totalSessions: updatedTotalSessions ?? totalSessions,
+          unlockedContent: updatedUnlockedContent ?? unlockedContent,
           mood: updatedMood,
           moodHistory: updatedMoodHistory,
           hasOnboarded: onboarded,
@@ -316,9 +205,11 @@ export default function NeuroChat() {
       moodHistory,
       hasOnboarded,
       hasChosenGuest,
+      totalSessions,
+      unlockedContent,
     };
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  }, [completedScenarios, earnedBadges, mood, moodHistory, hasOnboarded, hasChosenGuest, isGuest]);
+  }, [completedScenarios, earnedBadges, mood, moodHistory, hasOnboarded, hasChosenGuest, totalSessions, unlockedContent, isGuest]);
 
   useEffect(() => {
     if (!isSupabaseConfigured()) {
@@ -357,7 +248,11 @@ export default function NeuroChat() {
 
       const [profileResult, progressResult] = await Promise.all([
         supabase.from("profiles").select("has_onboarded,mood_history,last_mood").eq("id", sessionUser.id).maybeSingle(),
-        supabase.from("progress").select("completed_scenarios,earned_badges").eq("user_id", sessionUser.id).maybeSingle(),
+        supabase
+          .from("progress")
+          .select("completed_scenarios,earned_badges,total_sessions,unlocked_content")
+          .eq("user_id", sessionUser.id)
+          .maybeSingle(),
       ]);
 
       const profile = profileResult.data;
@@ -367,7 +262,9 @@ export default function NeuroChat() {
       setMood(profile?.last_mood ?? null);
       setMoodHistory(Array.isArray(profile?.mood_history) ? profile.mood_history : []);
       setCompletedScenarios(Array.isArray(progress?.completed_scenarios) ? progress.completed_scenarios : []);
-      setEarnedBadges(Array.isArray(progress?.earned_badges) ? progress.earned_badges : []);
+      setEarnedBadges(migrateEarnedBadges(Array.isArray(progress?.earned_badges) ? progress.earned_badges : []));
+      setTotalSessions(typeof progress?.total_sessions === "number" ? progress.total_sessions : 0);
+      setUnlockedContent(Array.isArray(progress?.unlocked_content) ? progress.unlocked_content : []);
       setScreen(profile?.has_onboarded ? "mood-checkin" : "onboarding");
       setIsBootstrapping(false);
     });
@@ -506,18 +403,100 @@ export default function NeuroChat() {
         const updatedCompleted = completedScenarios.includes(selectedScenario.id)
           ? completedScenarios
           : [...completedScenarios, selectedScenario.id];
+
+        const nextTotalSessions = totalSessions + 1;
+        const uniq = updatedCompleted.length;
+        const priorCompleted = completedScenarios;
+
+        let nextUnlocked = [...unlockedContent];
+        const unlockToasts = [];
+
+        const addUnlock = (id, msg) => {
+          if (!nextUnlocked.includes(id)) {
+            nextUnlocked.push(id);
+            unlockToasts.push(msg);
+          }
+        };
+
+        if (uniq >= 3) {
+          addUnlock(
+            "bonus-pack-1",
+            "🎁 You've unlocked 3 bonus scenarios! Find them in the scenario list.",
+          );
+        }
+        if (uniq >= 5) {
+          addUnlock(
+            "tips-advanced-convo",
+            "📚 You've unlocked Advanced Conversation Techniques — open Tips Library.",
+          );
+        }
+        const hadPriorDifficult = priorCompleted.some((sid) => scenarioById(sid)?.category === "Difficult");
+        if (selectedScenario.category === "Difficult" && !hadPriorDifficult) {
+          addUnlock(
+            "tips-calm-pressure",
+            "🌊 You've unlocked Staying Calm Under Pressure — open Tips Library.",
+          );
+        }
+        const coreCatsCovered = CORE_CATEGORIES.every((cat) =>
+          updatedCompleted.some((sid) => scenarioById(sid)?.category === cat),
+        );
+        if (coreCatsCovered) {
+          addUnlock(
+            "feature-custom-scenarios",
+            "🛠️ You've unlocked Custom Scenario Builder — coming in a future update.",
+          );
+        }
+        if (nextTotalSessions >= 10) {
+          addUnlock(
+            "feature-conversation-review",
+            "📜 You've unlocked Conversation Review — coming in a future update.",
+          );
+        }
+
+        const earnedSignals = [];
+        if (userMsgs.length >= 1) earnedSignals.push("first-steps");
+        if (hasQuestion) earnedSignals.push("curious");
+        if (hasDetail) earnedSignals.push("thoughtful");
+        if (uniq >= 3) earnedSignals.push("growing");
+        if (uniq >= 5) earnedSignals.push("rooted");
+        if (
+          CORE_CATEGORIES.every((cat) =>
+            updatedCompleted.some((sid) => scenarioById(sid)?.category === cat),
+          )
+        ) {
+          earnedSignals.push("explorer");
+        }
+        if (updatedCompleted.some((sid) => scenarioById(sid)?.category === "Difficult")) {
+          earnedSignals.push("brave");
+        }
+        if (nextTotalSessions >= 10) earnedSignals.push("dedicated");
+
+        const diffTags = new Set(
+          updatedCompleted.map((sid) => scenarioById(sid)?.difficulty).filter(Boolean),
+        );
+        if (diffTags.has("easy") && diffTags.has("medium") && diffTags.has("hard")) {
+          earnedSignals.push("all-rounder");
+        }
+        if (uniq >= 20) earnedSignals.push("summit");
+
+        const prevBadgeSet = new Set(migrateEarnedBadges(earnedBadges));
+        const newBadges = migrateEarnedBadges([
+          ...new Set([...earnedBadges, ...earnedSignals]),
+        ]);
+
+        const badgeToasts = [];
+        for (const bid of newBadges) {
+          if (!prevBadgeSet.has(bid)) {
+            const meta = BADGES.find((b) => b.id === bid);
+            if (meta?.toast) badgeToasts.push(meta.toast);
+          }
+        }
+
         setCompletedScenarios(updatedCompleted);
-        const earnedFromSignals = [];
-        if (userMsgs.length >= 1) earnedFromSignals.push("first-chat");
-        if (hasQuestion) earnedFromSignals.push("followup");
-        if (hasDetail) earnedFromSignals.push("listener");
-        const newBadges = [...new Set([...earnedBadges, ...earnedFromSignals])];
-        const completedCount = updatedCompleted.length;
-        if (completedCount >= 3 && !newBadges.includes("three-done")) newBadges.push("three-done");
-        if (completedCount >= 5 && !newBadges.includes("five-done")) newBadges.push("five-done");
-        const cats = new Set(SCENARIOS.filter((s) => updatedCompleted.includes(s.id)).map((s) => s.category));
-        if (cats.size >= 4 && !newBadges.includes("all-cats")) newBadges.push("all-cats");
+        setTotalSessions(nextTotalSessions);
+        setUnlockedContent(nextUnlocked);
         setEarnedBadges(newBadges);
+        queueToasts([...unlockToasts, ...badgeToasts]);
 
         if (authUser?.id) {
           setSessionSaving(true);
@@ -539,6 +518,8 @@ export default function NeuroChat() {
               updatedMood: mood,
               updatedMoodHistory: moodHistory,
               onboarded: hasOnboarded,
+              updatedTotalSessions: nextTotalSessions,
+              updatedUnlockedContent: nextUnlocked,
             });
           } catch (saveError) {
             console.error("Saving session failed:", saveError);
@@ -623,6 +604,8 @@ export default function NeuroChat() {
     setMood(null);
     setMoodHistory([]);
     setHasOnboarded(false);
+    setTotalSessions(0);
+    setUnlockedContent([]);
     setScreen("auth-choice");
   };
 
@@ -782,7 +765,7 @@ export default function NeuroChat() {
             <span style={{ fontSize: 20 }}>📊</span> See My Progress
           </button>
           <button
-            onClick={() => { setSelectedTipCategory(null); setScreen("tips"); }}
+            onClick={() => { setSelectedTipCategoryKey(null); setScreen("tips"); }}
             style={{ ...baseBtn, background: colors.greenLight, color: colors.text, padding: "16px 24px", fontSize: 16, border: `2px solid ${colors.greenBorder}`, display: "flex", alignItems: "center", gap: 12 }}
           >
             <span style={{ fontSize: 20 }}>💡</span> Tips Library
@@ -827,7 +810,7 @@ export default function NeuroChat() {
         <h2 style={{ fontFamily: "'Nunito', sans-serif", fontSize: 24, fontWeight: 800, color: colors.primaryDark, margin: "0 0 6px 0" }}>Choose a Scenario</h2>
         <p style={{ fontFamily: "'Nunito', sans-serif", fontSize: 14, color: colors.textMuted, margin: "0 0 24px 0" }}>Pick a situation you'd like to practise. There's no wrong choice.</p>
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {SCENARIOS.map((s) => (
+          {visibleScenarios.map((s) => (
             <button
               key={s.id}
               onClick={() => startScenario(s)}
@@ -845,8 +828,16 @@ export default function NeuroChat() {
               }}
             >
               <span style={{ fontSize: 28, flexShrink: 0 }}>{s.icon}</span>
-              <div>
+              <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 16, fontWeight: 700, color: colors.text }}>{s.title}</div>
+                <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 12, color: colors.primaryDark, marginTop: 4 }}>
+                  {s.category}
+                  {s.difficulty && (
+                    <span style={{ marginLeft: 8, color: colors.textMuted, fontWeight: 600 }}>
+                      · {DIFFICULTY_LABEL[s.difficulty]}
+                    </span>
+                  )}
+                </div>
                 <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 13, color: colors.textMuted, marginTop: 2 }}>{s.description}</div>
               </div>
               {completedScenarios.includes(s.id) && <span style={{ marginLeft: "auto", fontSize: 18, flexShrink: 0 }}>✅</span>}
@@ -873,6 +864,11 @@ export default function NeuroChat() {
           </div>
           <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 13, color: colors.primary, background: colors.primaryLight, borderRadius: 10, padding: "8px 14px", margin: "12px 0", textAlign: "center", fontWeight: 600 }}>
             {selectedScenario?.icon} {selectedScenario?.title}
+            {selectedScenario?.difficulty && (
+              <span style={{ display: "block", fontWeight: 500, fontSize: 12, color: colors.textMuted, marginTop: 4 }}>
+                {selectedScenario.category} · {DIFFICULTY_LABEL[selectedScenario.difficulty]}
+              </span>
+            )}
           </div>
 
           {/* Messages */}
@@ -1091,14 +1087,18 @@ export default function NeuroChat() {
         <p style={{ fontFamily: "'Nunito', sans-serif", fontSize: 14, color: colors.textMuted, margin: "0 0 24px 0" }}>Every conversation you practise is a step forward.</p>
 
         {/* Stats */}
-        <div style={{ display: "flex", gap: 12, marginBottom: 24 }}>
-          <div style={{ flex: 1, background: colors.primaryLight, borderRadius: 16, padding: "18px 16px", textAlign: "center" }}>
-            <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 32, fontWeight: 800, color: colors.primary }}>{completedScenarios.length}</div>
-            <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 13, color: colors.primaryDark, marginTop: 2 }}>Practised</div>
+        <div style={{ display: "flex", gap: 10, marginBottom: 24, flexWrap: "wrap" }}>
+          <div style={{ flex: "1 1 110px", background: colors.primaryLight, borderRadius: 16, padding: "16px 12px", textAlign: "center" }}>
+            <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 28, fontWeight: 800, color: colors.primary }}>{completedScenarios.length}</div>
+            <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 12, color: colors.primaryDark, marginTop: 2 }}>Different scenarios</div>
           </div>
-          <div style={{ flex: 1, background: colors.accentLight, borderRadius: 16, padding: "18px 16px", textAlign: "center" }}>
-            <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 32, fontWeight: 800, color: colors.amber }}>{earnedBadges.length}</div>
-            <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 13, color: "#975A16", marginTop: 2 }}>Badges</div>
+          <div style={{ flex: "1 1 110px", background: colors.greenLight, borderRadius: 16, padding: "16px 12px", textAlign: "center", border: `1px solid ${colors.greenBorder}` }}>
+            <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 28, fontWeight: 800, color: colors.green }}>{totalSessions}</div>
+            <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 12, color: "#276749", marginTop: 2 }}>Sessions</div>
+          </div>
+          <div style={{ flex: "1 1 110px", background: colors.accentLight, borderRadius: 16, padding: "16px 12px", textAlign: "center" }}>
+            <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 28, fontWeight: 800, color: colors.amber }}>{earnedBadges.length}</div>
+            <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 12, color: "#975A16", marginTop: 2 }}>Badges</div>
           </div>
         </div>
 
@@ -1106,7 +1106,7 @@ export default function NeuroChat() {
         <h3 style={{ fontFamily: "'Nunito', sans-serif", fontSize: 18, fontWeight: 800, color: colors.primaryDark, marginBottom: 14 }}>Badges</h3>
         <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 28 }}>
           {BADGES.map((b) => {
-            const earned = earnedBadges.includes(b.id);
+            const earned = migrateEarnedBadges(earnedBadges).includes(b.id);
             return (
               <div
                 key={b.id}
@@ -1155,64 +1155,67 @@ export default function NeuroChat() {
     </div>
   );
 
-  const renderTips = () => (
-    <div style={{ minHeight: "100vh", background: colors.bg }}>
-      <div style={{ maxWidth: 420, margin: "0 auto", padding: "0 20px", paddingBottom: 40 }}>
-        <div style={{ display: "flex", alignItems: "center", paddingTop: 20, paddingBottom: 20 }}>
-          <button
-            onClick={() => selectedTipCategory !== null ? setSelectedTipCategory(null) : setScreen("home")}
-            style={{ ...baseBtn, background: "transparent", color: colors.primary, padding: "8px 0", fontSize: 15 }}
-          >
-            ← {selectedTipCategory !== null ? "Categories" : "Back"}
-          </button>
-        </div>
-        <h2 style={{ fontFamily: "'Nunito', sans-serif", fontSize: 24, fontWeight: 800, color: colors.primaryDark, margin: "0 0 4px 0" }}>Tips Library</h2>
-        <p style={{ fontFamily: "'Nunito', sans-serif", fontSize: 14, color: colors.textMuted, margin: "0 0 24px 0" }}>Quick, practical advice you can use anytime.</p>
+  const renderTips = () => {
+    const selectedCat = tipsData.find((c) => c.category === selectedTipCategoryKey);
+    return (
+      <div style={{ minHeight: "100vh", background: colors.bg }}>
+        <div style={{ maxWidth: 420, margin: "0 auto", padding: "0 20px", paddingBottom: 40 }}>
+          <div style={{ display: "flex", alignItems: "center", paddingTop: 20, paddingBottom: 20 }}>
+            <button
+              onClick={() => (selectedTipCategoryKey !== null ? setSelectedTipCategoryKey(null) : setScreen("home"))}
+              style={{ ...baseBtn, background: "transparent", color: colors.primary, padding: "8px 0", fontSize: 15 }}
+            >
+              ← {selectedTipCategoryKey !== null ? "Categories" : "Back"}
+            </button>
+          </div>
+          <h2 style={{ fontFamily: "'Nunito', sans-serif", fontSize: 24, fontWeight: 800, color: colors.primaryDark, margin: "0 0 4px 0" }}>Tips Library</h2>
+          <p style={{ fontFamily: "'Nunito', sans-serif", fontSize: 14, color: colors.textMuted, margin: "0 0 24px 0" }}>Quick, practical advice you can use anytime.</p>
 
-        {selectedTipCategory === null ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {TIPS_DATA.map((cat, i) => (
-              <button
-                key={i}
-                onClick={() => setSelectedTipCategory(i)}
-                style={{
-                  ...baseBtn,
-                  background: colors.card,
-                  border: `1px solid ${colors.border}`,
-                  borderRadius: 16,
-                  padding: "18px 20px",
-                  textAlign: "left",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 14,
-                  boxShadow: colors.shadow,
-                }}
-              >
-                <span style={{ fontSize: 28 }}>{cat.icon}</span>
-                <div>
-                  <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 16, fontWeight: 700, color: colors.text }}>{cat.category}</div>
-                  <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 13, color: colors.textMuted }}>{cat.tips.length} tips</div>
+          {selectedTipCategoryKey === null ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {tipsData.map((cat) => (
+                <button
+                  key={cat.category}
+                  onClick={() => setSelectedTipCategoryKey(cat.category)}
+                  style={{
+                    ...baseBtn,
+                    background: colors.card,
+                    border: `1px solid ${colors.border}`,
+                    borderRadius: 16,
+                    padding: "18px 20px",
+                    textAlign: "left",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 14,
+                    boxShadow: colors.shadow,
+                  }}
+                >
+                  <span style={{ fontSize: 28 }}>{cat.icon}</span>
+                  <div>
+                    <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 16, fontWeight: 700, color: colors.text }}>{cat.category}</div>
+                    <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 13, color: colors.textMuted }}>{cat.tips.length} tips</div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          ) : selectedCat ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <h3 style={{ fontFamily: "'Nunito', sans-serif", fontSize: 20, fontWeight: 800, color: colors.primaryDark, margin: "0 0 6px 0", display: "flex", alignItems: "center", gap: 10 }}>
+                <span>{selectedCat.icon}</span>
+                {selectedCat.category}
+              </h3>
+              {selectedCat.tips.map((tip, i) => (
+                <div key={i} style={{ background: colors.card, border: `1px solid ${colors.border}`, borderRadius: 16, padding: "16px 20px", boxShadow: colors.shadow }}>
+                  <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 15, fontWeight: 700, color: colors.text, marginBottom: 6 }}>{tip.title}</div>
+                  <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 14, color: colors.textMuted, lineHeight: 1.6 }}>{tip.body}</div>
                 </div>
-              </button>
-            ))}
-          </div>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <h3 style={{ fontFamily: "'Nunito', sans-serif", fontSize: 20, fontWeight: 800, color: colors.primaryDark, margin: "0 0 6px 0", display: "flex", alignItems: "center", gap: 10 }}>
-              <span>{TIPS_DATA[selectedTipCategory].icon}</span>
-              {TIPS_DATA[selectedTipCategory].category}
-            </h3>
-            {TIPS_DATA[selectedTipCategory].tips.map((tip, i) => (
-              <div key={i} style={{ background: colors.card, border: `1px solid ${colors.border}`, borderRadius: 16, padding: "16px 20px", boxShadow: colors.shadow }}>
-                <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 15, fontWeight: 700, color: colors.text, marginBottom: 6 }}>{tip.title}</div>
-                <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 14, color: colors.textMuted, lineHeight: 1.6 }}>{tip.body}</div>
-              </div>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          ) : null}
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderHowTo = () => (
     <div style={{ minHeight: "100vh", background: colors.bg }}>
@@ -1268,6 +1271,31 @@ export default function NeuroChat() {
       {screen === "progress" && renderProgress()}
       {screen === "tips" && renderTips()}
       {screen === "howto" && renderHowTo()}
+      {toastMessage && (
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            position: "fixed",
+            top: 12,
+            left: "50%",
+            transform: "translateX(-50%)",
+            maxWidth: 400,
+            width: "calc(100% - 40px)",
+            background: colors.card,
+            border: `1px solid ${colors.border}`,
+            borderRadius: 14,
+            padding: "12px 16px",
+            boxShadow: colors.shadowLg,
+            fontFamily: "'Nunito', sans-serif",
+            fontSize: 14,
+            color: colors.text,
+            zIndex: 9999,
+          }}
+        >
+          {toastMessage}
+        </div>
+      )}
     </div>
   );
 }

@@ -47,6 +47,7 @@ function buildSystemPrompt(scenario) {
     `Scenario category: ${scenario?.category ?? "Unknown category"}`,
     `Scenario description: ${scenario?.description ?? "No description provided"}`,
     `Scenario opener: ${scenario?.opener ?? "No opener provided"}`,
+    `How you should behave as the AI partner: ${scenario?.partnerBrief ?? "Respond naturally and kindly, staying appropriate for the scenario."}`,
   ].join("\n");
 }
 
@@ -99,6 +100,7 @@ app.post("/api/progress/update", async (req, res) => {
       completedScenarios = [],
       earnedBadges = [],
       totalSessions = 0,
+      unlockedContent = [],
       moodHistory = [],
       mood,
       hasOnboarded,
@@ -113,6 +115,7 @@ app.post("/api/progress/update", async (req, res) => {
       completed_scenarios: completedScenarios,
       earned_badges: earnedBadges,
       total_sessions: totalSessions,
+      unlocked_content: unlockedContent,
       last_active: new Date().toISOString(),
     };
 

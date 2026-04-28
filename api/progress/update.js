@@ -24,6 +24,7 @@ export default async function handler(req, res) {
       completedScenarios = [],
       earnedBadges = [],
       totalSessions = 0,
+      unlockedContent = [],
       moodHistory = [],
       mood,
       hasOnboarded,
@@ -38,6 +39,7 @@ export default async function handler(req, res) {
       completed_scenarios: completedScenarios,
       earned_badges: earnedBadges,
       total_sessions: totalSessions,
+      unlocked_content: unlockedContent,
       last_active: new Date().toISOString(),
     });
 
