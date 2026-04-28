@@ -638,8 +638,11 @@ export default function NeuroChat() {
             disabled={authSending}
             style={{ ...baseBtn, width: "100%", background: authSending ? colors.border : colors.primary, color: "#fff", padding: "14px 16px", fontSize: 15 }}
           >
-            {authSending ? "Sending…" : "Sign up with email"}
+            {authSending ? "Sending…" : "Continue with email"}
           </button>
+          <p style={{ fontFamily: "'Nunito', sans-serif", fontSize: 12, color: colors.textMuted, marginTop: 8, marginBottom: 0, lineHeight: 1.5 }}>
+            We'll send you a magic link — works for new and existing accounts.
+          </p>
           {authError && (
             <p role="alert" style={{ fontFamily: "'Nunito', sans-serif", fontSize: 13, color: "#9C4221", background: colors.amberLight, border: `1px solid ${colors.amberBorder}`, borderRadius: 10, padding: "10px 12px", marginTop: 10 }}>
               {authError}
