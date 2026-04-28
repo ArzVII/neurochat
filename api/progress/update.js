@@ -28,6 +28,8 @@ export default async function handler(req, res) {
       moodHistory = [],
       mood,
       hasOnboarded,
+      preparePlan,
+      showHints,
     } = body;
 
     if (!userId) {
@@ -52,6 +54,12 @@ export default async function handler(req, res) {
     if (moodHistory.length > 0 || mood) {
       profilePayload.mood_history = moodHistory;
       profilePayload.last_mood = mood ?? moodHistory[moodHistory.length - 1] ?? null;
+    }
+    if (preparePlan !== undefined) {
+      profilePayload.prepare_plan = preparePlan;
+    }
+    if (typeof showHints === "boolean") {
+      profilePayload.show_hints = showHints;
     }
 
     const { error: profileError } = await supabaseAdmin.from("profiles").upsert(profilePayload);
