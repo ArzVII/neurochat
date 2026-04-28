@@ -1,7 +1,11 @@
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { isSupabaseConfigured, supabase } from "./supabaseClient";
 
 const CONVERSATION_ENDPOINT = "/api/conversation";
 const FEEDBACK_ENDPOINT = "/api/feedback";
+const PROGRESS_ENDPOINT = "/api/progress/update";
+const SAVE_SESSION_ENDPOINT = "/api/sessions/save";
+const STORAGE_KEY = "neurochat_guest_state_v2";
 
 const SCENARIOS = [
   {
@@ -213,6 +217,12 @@ const baseBtn = {
 };
 
 export default function NeuroChat() {
+  const [isBootstrapping, setIsBootstrapping] = useState(true);
+  const [authMode, setAuthMode] = useState("entry");
+  const [emailInput, setEmailInput] = useState("");
+  const [authNotice, setAuthNotice] = useState("");
+  const [authUser, setAuthUser] = useState(null);
+  const [isGuest, setIsGuest] = useState(true);
   const [screen, setScreen] = useState("home");
   const [selectedScenario, setSelectedScenario] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -226,12 +236,180 @@ export default function NeuroChat() {
   const [chatError, setChatError] = useState("");
   const [feedbackLoading, setFeedbackLoading] = useState(false);
   const [selectedTipCategory, setSelectedTipCategory] = useState(null);
+  const [mood, setMood] = useState(null);
+  const [moodHistory, setMoodHistory] = useState([]);
+  const [hasOnboarded, setHasOnboarded] = useState(false);
+  const [onboardingStep, setOnboardingStep] = useState(0);
+  const [sessionSaving, setSessionSaving] = useState(false);
   const chatEndRef = useRef(null);
   const maxTurns = 4;
+
+  const moodOptions = [
+    { id: "good", emoji: "😊", label: "Feeling good", bg: "#F0FFF4", border: "#9AE6B4", text: colors.green, hint: "Want to try something new today?" },
+    { id: "okay", emoji: "😐", label: "Doing okay", bg: "#FFFAF0", border: "#FBD38D", text: "#B7791F", hint: "Maybe a familiar scenario?" },
+    { id: "low", emoji: "😔", label: "Bit low", bg: "#FAF5FF", border: "#D6BCFA", text: "#6B46C1", hint: "Go easy on yourself today. Something short?" },
+  ];
+
+  const moodConfig = moodOptions.find((option) => option.id === mood);
+
+  const loadGuestState = () => {
+    try {
+      const raw = window.localStorage.getItem(STORAGE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      setCompletedScenarios(Array.isArray(parsed.completedScenarios) ? parsed.completedScenarios : []);
+      setEarnedBadges(Array.isArray(parsed.earnedBadges) ? parsed.earnedBadges : []);
+      setMood(parsed.mood ?? null);
+      setMoodHistory(Array.isArray(parsed.moodHistory) ? parsed.moodHistory : []);
+      setHasOnboarded(Boolean(parsed.hasOnboarded));
+      return parsed;
+    } catch (error) {
+      console.error("Failed to load guest state:", error);
+      return null;
+    }
+  };
+
+  const saveGuestState = (overrides = {}) => {
+    if (!isGuest) return;
+    const state = {
+      completedScenarios,
+      earnedBadges,
+      mood,
+      moodHistory,
+      hasOnboarded,
+      ...overrides,
+    };
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  };
+
+  const syncProgressToSupabase = async ({ updatedCompleted, updatedBadges, updatedMood, updatedMoodHistory, onboarded }) => {
+    if (!authUser?.id) return;
+    try {
+      await fetch(PROGRESS_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: authUser.id,
+          completedScenarios: updatedCompleted,
+          earnedBadges: updatedBadges,
+          totalSessions: updatedCompleted.length,
+          mood: updatedMood,
+          moodHistory: updatedMoodHistory,
+          hasOnboarded: onboarded,
+        }),
+      });
+    } catch (error) {
+      console.error("Failed to sync progress:", error);
+    }
+  };
+
+  useEffect(() => {
+    if (!isGuest) return;
+    const state = {
+      completedScenarios,
+      earnedBadges,
+      mood,
+      moodHistory,
+      hasOnboarded,
+    };
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }, [completedScenarios, earnedBadges, mood, moodHistory, hasOnboarded, isGuest]);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured()) {
+      const guestState = loadGuestState();
+      setAuthMode("guest");
+      setScreen(guestState?.hasOnboarded ? "mood-checkin" : "onboarding");
+      setIsBootstrapping(false);
+      return;
+    }
+
+    let active = true;
+    supabase.auth.getSession().then(async ({ data }) => {
+      if (!active) return;
+      const sessionUser = data.session?.user ?? null;
+      if (!sessionUser) {
+        loadGuestState();
+        setAuthMode("entry");
+        setIsGuest(true);
+        setScreen("home");
+        setIsBootstrapping(false);
+        return;
+      }
+
+      setAuthUser(sessionUser);
+      setIsGuest(false);
+
+      const [profileResult, progressResult] = await Promise.all([
+        supabase.from("profiles").select("has_onboarded,mood_history,last_mood").eq("id", sessionUser.id).maybeSingle(),
+        supabase.from("progress").select("completed_scenarios,earned_badges").eq("user_id", sessionUser.id).maybeSingle(),
+      ]);
+
+      const profile = profileResult.data;
+      const progress = progressResult.data;
+
+      setHasOnboarded(Boolean(profile?.has_onboarded));
+      setMood(profile?.last_mood ?? null);
+      setMoodHistory(Array.isArray(profile?.mood_history) ? profile.mood_history : []);
+      setCompletedScenarios(Array.isArray(progress?.completed_scenarios) ? progress.completed_scenarios : []);
+      setEarnedBadges(Array.isArray(progress?.earned_badges) ? progress.earned_badges : []);
+      setScreen(profile?.has_onboarded ? "mood-checkin" : "onboarding");
+      setAuthMode("authenticated");
+      setIsBootstrapping(false);
+    });
+
+    const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
+      setAuthUser(session?.user ?? null);
+    });
+
+    return () => {
+      active = false;
+      subscription.subscription.unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, typing]);
+
+  const enterGuestMode = () => {
+    setIsGuest(true);
+    setAuthMode("guest");
+    const guestState = loadGuestState();
+    setScreen(guestState?.hasOnboarded ? "mood-checkin" : "onboarding");
+  };
+
+  const sendMagicLink = async () => {
+    if (!supabase || !emailInput.trim()) return;
+    setAuthNotice("");
+    const { error } = await supabase.auth.signInWithOtp({
+      email: emailInput.trim(),
+      options: { emailRedirectTo: window.location.origin },
+    });
+    if (error) {
+      setAuthNotice(error.message);
+      return;
+    }
+    setAuthNotice("Magic link sent. Check your email to continue.");
+  };
+
+  const chooseMood = async (selectedMood) => {
+    const updatedMoodHistory = [...moodHistory, selectedMood].slice(-50);
+    setMood(selectedMood);
+    setMoodHistory(updatedMoodHistory);
+    setScreen("home");
+    if (isGuest) {
+      saveGuestState({ mood: selectedMood, moodHistory: updatedMoodHistory });
+    } else {
+      await syncProgressToSupabase({
+        updatedCompleted: completedScenarios,
+        updatedBadges: earnedBadges,
+        updatedMood: selectedMood,
+        updatedMoodHistory,
+        onboarded: hasOnboarded,
+      });
+    }
+  };
 
   const startScenario = (scenario) => {
     setSelectedScenario(scenario);
@@ -256,6 +434,7 @@ export default function NeuroChat() {
 
     if (newTurn >= maxTurns) {
       setFeedbackLoading(true);
+      let resolvedFeedback = null;
       try {
         const response = await fetch(FEEDBACK_ENDPOINT, {
           method: "POST",
@@ -273,35 +452,67 @@ export default function NeuroChat() {
         }
 
         const aiFeedback = await response.json();
-        setFeedback({
+        resolvedFeedback = {
           strengths: Array.isArray(aiFeedback.strengths) ? aiFeedback.strengths : [],
           explore: Array.isArray(aiFeedback.explore) ? aiFeedback.explore : [],
           examples: Array.isArray(aiFeedback.examples) ? aiFeedback.examples : [],
-        });
+        };
+        setFeedback(resolvedFeedback);
       } catch (error) {
         console.error(error);
         const fallbackExamples = (SUGGESTED_REPLIES[selectedScenario?.id] || []).slice(0, 2);
-        setFeedback({
+        resolvedFeedback = {
           strengths: ["You showed up and practised a real conversation - that is meaningful progress."],
           explore: ["Feedback is temporarily unavailable. Try again in a moment for detailed coaching insights."],
           examples: fallbackExamples,
-        });
+        };
+        setFeedback(resolvedFeedback);
       } finally {
         const { userMsgs, hasQuestion, hasDetail } = derivePracticeSignals(newMessages);
-        if (!completedScenarios.includes(selectedScenario.id)) {
-          setCompletedScenarios((prev) => [...prev, selectedScenario.id]);
-        }
+        const updatedCompleted = completedScenarios.includes(selectedScenario.id)
+          ? completedScenarios
+          : [...completedScenarios, selectedScenario.id];
+        setCompletedScenarios(updatedCompleted);
         const earnedFromSignals = [];
         if (userMsgs.length >= 1) earnedFromSignals.push("first-chat");
         if (hasQuestion) earnedFromSignals.push("followup");
         if (hasDetail) earnedFromSignals.push("listener");
         const newBadges = [...new Set([...earnedBadges, ...earnedFromSignals])];
-        const completedCount = completedScenarios.length + 1;
+        const completedCount = updatedCompleted.length;
         if (completedCount >= 3 && !newBadges.includes("three-done")) newBadges.push("three-done");
         if (completedCount >= 5 && !newBadges.includes("five-done")) newBadges.push("five-done");
-        const cats = new Set(SCENARIOS.filter((s) => [...completedScenarios, selectedScenario.id].includes(s.id)).map((s) => s.category));
+        const cats = new Set(SCENARIOS.filter((s) => updatedCompleted.includes(s.id)).map((s) => s.category));
         if (cats.size >= 4 && !newBadges.includes("all-cats")) newBadges.push("all-cats");
         setEarnedBadges(newBadges);
+
+        if (authUser?.id) {
+          setSessionSaving(true);
+          try {
+            await fetch(SAVE_SESSION_ENDPOINT, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                userId: authUser.id,
+                scenarioId: selectedScenario.id,
+                messages: newMessages,
+                feedback: resolvedFeedback,
+                mood,
+              }),
+            });
+            await syncProgressToSupabase({
+              updatedCompleted,
+              updatedBadges: newBadges,
+              updatedMood: mood,
+              updatedMoodHistory: moodHistory,
+              onboarded: hasOnboarded,
+            });
+          } catch (saveError) {
+            console.error("Saving session failed:", saveError);
+          } finally {
+            setSessionSaving(false);
+          }
+        }
+
         setFeedbackLoading(false);
         setScreen("feedback");
       }
@@ -346,6 +557,128 @@ export default function NeuroChat() {
     }
   };
 
+  const finishOnboarding = async () => {
+    setHasOnboarded(true);
+    setOnboardingStep(0);
+    if (isGuest) {
+      saveGuestState({ hasOnboarded: true });
+    } else {
+      await syncProgressToSupabase({
+        updatedCompleted: completedScenarios,
+        updatedBadges: earnedBadges,
+        updatedMood: mood,
+        updatedMoodHistory: moodHistory,
+        onboarded: true,
+      });
+    }
+    setScreen("mood-checkin");
+  };
+
+  const handleSignOut = async () => {
+    if (!supabase) return;
+    await supabase.auth.signOut();
+    setAuthUser(null);
+    setIsGuest(true);
+    setAuthMode("entry");
+    setCompletedScenarios([]);
+    setEarnedBadges([]);
+    setMood(null);
+    setMoodHistory([]);
+    setHasOnboarded(false);
+    setScreen("home");
+  };
+
+  const renderEntry = () => (
+    <div style={{ minHeight: "100vh", background: colors.bg, display: "flex", justifyContent: "center" }}>
+      <div style={{ width: "100%", maxWidth: 420, padding: "48px 20px 40px" }}>
+        <div style={{ textAlign: "center", marginBottom: 20 }}>
+          <div style={{ fontSize: 48, marginBottom: 8 }}>🧠</div>
+          <h1 style={{ fontFamily: "'Nunito', sans-serif", fontSize: 32, color: colors.primaryDark, margin: 0 }}>NeuroChat</h1>
+          <p style={{ fontFamily: "'Nunito', sans-serif", fontSize: 15, color: colors.textMuted, marginTop: 8 }}>Sign in with magic link or continue as guest.</p>
+        </div>
+        <div style={{ background: colors.card, border: `1px solid ${colors.border}`, borderRadius: 16, padding: 20 }}>
+          <input
+            value={emailInput}
+            onChange={(e) => setEmailInput(e.target.value)}
+            placeholder="you@example.com"
+            style={{ width: "100%", boxSizing: "border-box", fontFamily: "'Nunito', sans-serif", fontSize: 15, borderRadius: 12, border: `1px solid ${colors.border}`, padding: "12px 14px", marginBottom: 10 }}
+          />
+          <button onClick={sendMagicLink} style={{ ...baseBtn, width: "100%", background: colors.primary, color: "#fff", padding: "14px 16px", fontSize: 15 }}>Send Magic Link</button>
+          {authNotice && <p style={{ fontFamily: "'Nunito', sans-serif", fontSize: 13, color: colors.textMuted, marginTop: 10 }}>{authNotice}</p>}
+          <button onClick={enterGuestMode} style={{ ...baseBtn, width: "100%", marginTop: 10, background: colors.primaryLight, color: colors.primaryDark, padding: "14px 16px", fontSize: 15, border: `1px solid ${colors.border}` }}>Continue as guest</button>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderOnboarding = () => {
+    const pages = [
+      {
+        title: "Welcome to NeuroChat",
+        body1: "This is a safe space to practise conversations. No one is watching. No one is scoring you.",
+      },
+      {
+        title: "How it works",
+        body1: "You'll chat with an AI partner who plays the other person. Afterwards, you'll get gentle feedback - strengths first, always.",
+        body2: "If you get stuck, tap for a suggestion. There are no wrong answers.",
+      },
+      {
+        title: "Set your pace",
+        body1: "You control everything. Practise as much or as little as you want. We'll never pressure you.",
+        body2: "Ready to try your first conversation?",
+      },
+    ];
+
+    const page = pages[onboardingStep];
+    const isLast = onboardingStep === pages.length - 1;
+
+    return (
+      <div style={{ minHeight: "100vh", background: colors.bg, display: "flex", justifyContent: "center" }}>
+        <div style={{ width: "100%", maxWidth: 420, padding: "56px 20px 40px" }}>
+          <div style={{ background: colors.card, border: `1px solid ${colors.border}`, borderRadius: 18, padding: 24, boxShadow: colors.shadow }}>
+            <p style={{ fontFamily: "'Nunito', sans-serif", fontSize: 12, color: colors.textMuted, marginBottom: 10 }}>Step {onboardingStep + 1} of 3</p>
+            <h2 style={{ fontFamily: "'Nunito', sans-serif", fontSize: 26, margin: "0 0 12px 0", color: colors.primaryDark }}>{page.title}</h2>
+            <p style={{ fontFamily: "'Nunito', sans-serif", fontSize: 15, color: colors.text, lineHeight: 1.7 }}>{page.body1}</p>
+            {page.body2 && <p style={{ fontFamily: "'Nunito', sans-serif", fontSize: 15, color: colors.textMuted, lineHeight: 1.7, marginTop: 8 }}>{page.body2}</p>}
+            <button
+              onClick={() => {
+                if (isLast) {
+                  finishOnboarding();
+                  return;
+                }
+                setOnboardingStep(onboardingStep + 1);
+              }}
+              style={{ ...baseBtn, marginTop: 20, width: "100%", background: colors.primary, color: "#fff", padding: "14px 16px", fontSize: 16 }}
+            >
+              {isLast ? "Let's go" : "Continue"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderMoodCheckIn = () => (
+    <div style={{ minHeight: "100vh", background: colors.bg, display: "flex", justifyContent: "center" }}>
+      <div style={{ width: "100%", maxWidth: 420, padding: "52px 20px 40px" }}>
+        <h2 style={{ fontFamily: "'Nunito', sans-serif", fontSize: 28, color: colors.primaryDark, margin: "0 0 8px 0" }}>How are you feeling?</h2>
+        <p style={{ fontFamily: "'Nunito', sans-serif", fontSize: 14, color: colors.textMuted, marginBottom: 20 }}>Pick anything that fits right now. You can change it later.</p>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {moodOptions.map((option) => (
+            <button
+              key={option.id}
+              onClick={() => chooseMood(option.id)}
+              style={{ ...baseBtn, background: option.bg, color: option.text, border: `1px solid ${option.border}`, borderRadius: 16, textAlign: "left", padding: "14px 16px", fontSize: 16, display: "flex", alignItems: "center", gap: 10 }}
+            >
+              <span style={{ fontSize: 22 }}>{option.emoji}</span> {option.label}
+            </button>
+          ))}
+        </div>
+        <button onClick={() => setScreen("home")} style={{ ...baseBtn, background: "transparent", color: colors.textMuted, fontSize: 14, marginTop: 14 }}>Skip for now</button>
+      </div>
+    </div>
+  );
+
   // ─── RENDER SCREENS ───
 
   const renderHome = () => (
@@ -363,6 +696,13 @@ export default function NeuroChat() {
         </div>
 
         {/* Main buttons */}
+        {moodConfig && (
+          <div style={{ background: moodConfig.bg, border: `1px solid ${moodConfig.border}`, borderRadius: 14, padding: "10px 12px", marginTop: 20 }}>
+            <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 13, color: moodConfig.text }}>
+              {moodConfig.emoji} {moodConfig.label} - {moodConfig.hint} <button onClick={() => setScreen("mood-checkin")} style={{ ...baseBtn, background: "transparent", color: moodConfig.text, fontSize: 13, textDecoration: "underline", padding: 0 }}>change</button>
+            </div>
+          </div>
+        )}
         <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 32 }}>
           <button
             onClick={() => setScreen("scenarios")}
@@ -388,6 +728,21 @@ export default function NeuroChat() {
           >
             <span style={{ fontSize: 20 }}>❓</span> How This Works
           </button>
+          {authUser ? (
+            <button
+              onClick={handleSignOut}
+              style={{ ...baseBtn, background: colors.card, color: colors.textMuted, padding: "14px 24px", fontSize: 14, border: `1px solid ${colors.border}` }}
+            >
+              Sign out
+            </button>
+          ) : (
+            <button
+              onClick={() => setAuthMode("entry")}
+              style={{ ...baseBtn, background: colors.card, color: colors.textMuted, padding: "14px 24px", fontSize: 14, border: `1px solid ${colors.border}` }}
+            >
+              Sign in with magic link
+            </button>
+          )}
         </div>
 
         {/* Reassurance */}
@@ -571,6 +926,11 @@ export default function NeuroChat() {
             {feedbackLoading && (
               <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 13, color: colors.textMuted, marginTop: 8 }}>
                 Generating your feedback...
+              </div>
+            )}
+            {sessionSaving && (
+              <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 13, color: colors.textMuted, marginTop: 4 }}>
+                Saving your session...
               </div>
             )}
           </div>
@@ -822,7 +1182,11 @@ export default function NeuroChat() {
   return (
     <div>
       <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
-      {screen === "home" && renderHome()}
+      {isBootstrapping && renderHome()}
+      {!isBootstrapping && authMode === "entry" && renderEntry()}
+      {!isBootstrapping && screen === "onboarding" && renderOnboarding()}
+      {!isBootstrapping && screen === "mood-checkin" && renderMoodCheckIn()}
+      {!isBootstrapping && screen === "home" && renderHome()}
       {screen === "scenarios" && renderScenarios()}
       {screen === "chat" && renderChat()}
       {screen === "feedback" && renderFeedback()}
