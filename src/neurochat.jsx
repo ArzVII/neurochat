@@ -220,6 +220,8 @@ export default function NeuroChat() {
   const [isBootstrapping, setIsBootstrapping] = useState(true);
   const [emailInput, setEmailInput] = useState("");
   const [authNotice, setAuthNotice] = useState("");
+  const [authError, setAuthError] = useState("");
+  const [authSending, setAuthSending] = useState(false);
   const [authUser, setAuthUser] = useState(null);
   const [isGuest, setIsGuest] = useState(true);
   const [screen, setScreen] = useState("home");
@@ -394,17 +396,35 @@ export default function NeuroChat() {
   };
 
   const sendMagicLink = async () => {
-    if (!supabase || !emailInput.trim()) return;
+    setAuthError("");
     setAuthNotice("");
-    const { error } = await supabase.auth.signInWithOtp({
-      email: emailInput.trim(),
-      options: { emailRedirectTo: window.location.origin },
-    });
-    if (error) {
-      setAuthNotice(error.message);
+    const trimmed = emailInput.trim();
+    if (!trimmed) {
+      setAuthError("Please enter your email address.");
       return;
     }
-    setAuthNotice("Magic link sent. Check your email to continue.");
+    if (!supabase) {
+      setAuthError(
+        "Supabase is not configured. Add SUPABASE_URL and SUPABASE_ANON_KEY (or VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY) to .env and restart npm run dev.",
+      );
+      return;
+    }
+    setAuthSending(true);
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email: trimmed,
+        options: { emailRedirectTo: `${window.location.origin}/` },
+      });
+      if (error) {
+        setAuthError(error.message || String(error));
+        return;
+      }
+      setAuthNotice("Magic link sent. Check your email to continue.");
+    } catch (err) {
+      setAuthError(err?.message ?? "Network error — could not reach Supabase.");
+    } finally {
+      setAuthSending(false);
+    }
   };
 
   const chooseMood = async (selectedMood) => {
@@ -615,14 +635,36 @@ export default function NeuroChat() {
           <p style={{ fontFamily: "'Nunito', sans-serif", fontSize: 15, color: colors.textMuted, marginTop: 8 }}>Choose how you want to continue.</p>
         </div>
         <div style={{ background: colors.card, border: `1px solid ${colors.border}`, borderRadius: 16, padding: 20 }}>
+          {!isSupabaseConfigured() && (
+            <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 13, color: "#9C4221", background: colors.amberLight, border: `1px solid ${colors.amberBorder}`, borderRadius: 10, padding: "10px 12px", marginBottom: 12 }}>
+              Supabase env vars are missing or invalid. Add SUPABASE_URL and SUPABASE_ANON_KEY to <code style={{ fontFamily: "monospace", fontSize: 12 }}>.env</code>, then restart the dev server.
+            </div>
+          )}
           <input
             value={emailInput}
-            onChange={(e) => setEmailInput(e.target.value)}
+            onChange={(e) => {
+              setEmailInput(e.target.value);
+              setAuthError("");
+            }}
             placeholder="you@example.com"
+            disabled={authSending}
             style={{ width: "100%", boxSizing: "border-box", fontFamily: "'Nunito', sans-serif", fontSize: 15, borderRadius: 12, border: `1px solid ${colors.border}`, padding: "12px 14px", marginBottom: 10 }}
           />
-          <button onClick={sendMagicLink} style={{ ...baseBtn, width: "100%", background: colors.primary, color: "#fff", padding: "14px 16px", fontSize: 15 }}>Sign up with email</button>
-          {authNotice && <p style={{ fontFamily: "'Nunito', sans-serif", fontSize: 13, color: colors.textMuted, marginTop: 10 }}>{authNotice}</p>}
+          <button
+            onClick={sendMagicLink}
+            disabled={authSending}
+            style={{ ...baseBtn, width: "100%", background: authSending ? colors.border : colors.primary, color: "#fff", padding: "14px 16px", fontSize: 15 }}
+          >
+            {authSending ? "Sending…" : "Sign up with email"}
+          </button>
+          {authError && (
+            <p role="alert" style={{ fontFamily: "'Nunito', sans-serif", fontSize: 13, color: "#9C4221", background: colors.amberLight, border: `1px solid ${colors.amberBorder}`, borderRadius: 10, padding: "10px 12px", marginTop: 10 }}>
+              {authError}
+            </p>
+          )}
+          {authNotice && !authError && (
+            <p style={{ fontFamily: "'Nunito', sans-serif", fontSize: 13, color: "#276749", marginTop: 10 }}>{authNotice}</p>
+          )}
           <button onClick={enterGuestMode} style={{ ...baseBtn, width: "100%", marginTop: 10, background: colors.primaryLight, color: colors.primaryDark, padding: "14px 16px", fontSize: 15, border: `1px solid ${colors.border}` }}>Continue as guest</button>
         </div>
       </div>
