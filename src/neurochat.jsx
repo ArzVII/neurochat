@@ -641,7 +641,7 @@ export default function NeuroChat() {
             {authSending ? "Sending…" : "Continue with email"}
           </button>
           <p style={{ fontFamily: "'Nunito', sans-serif", fontSize: 12, color: colors.textMuted, marginTop: 8, marginBottom: 0, lineHeight: 1.5 }}>
-            We'll send you a link works for new and existing accounts.
+            We'll send you a link. It works for new and existing accounts.
           </p>
           {authError && (
             <p role="alert" style={{ fontFamily: "'Nunito', sans-serif", fontSize: 13, color: "#9C4221", background: colors.amberLight, border: `1px solid ${colors.amberBorder}`, borderRadius: 10, padding: "10px 12px", marginTop: 10 }}>
