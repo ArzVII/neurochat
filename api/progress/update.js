@@ -30,6 +30,7 @@ export default async function handler(req, res) {
       hasOnboarded,
       preparePlan,
       showHints,
+      pacingMode,
     } = body;
 
     if (!userId) {
@@ -60,6 +61,9 @@ export default async function handler(req, res) {
     }
     if (typeof showHints === "boolean") {
       profilePayload.show_hints = showHints;
+    }
+    if (typeof pacingMode === "boolean") {
+      profilePayload.pacing_mode = pacingMode;
     }
 
     const { error: profileError } = await supabaseAdmin.from("profiles").upsert(profilePayload);

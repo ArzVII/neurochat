@@ -21,6 +21,7 @@ const CUSTOM_SCENARIOS_LIST_ENDPOINT = "/api/custom-scenarios/list";
 const CUSTOM_SCENARIOS_SAVE_ENDPOINT = "/api/custom-scenarios/save";
 const PREPARE_ENDPOINT = "/api/prepare";
 const EXPLAIN_ENDPOINT = "/api/explain";
+const ADMIN_ORG_ENDPOINT = "/api/admin/org";
 const STORAGE_KEY = "neurochat_guest_state_v2";
 
 const CORE_CATEGORIES = ["Work", "Social", "Everyday", "Difficult", "Relationships", "Self-Advocacy"];
@@ -53,6 +54,15 @@ function isPrepareReflectionDue(plan) {
   today.setHours(0, 0, 0, 0);
   d.setHours(0, 0, 0, 0);
   return d.getTime() < today.getTime();
+}
+
+function formatDateShort(isoLike) {
+  if (!isoLike) return "";
+  try {
+    return new Date(isoLike).toLocaleDateString(undefined, { dateStyle: "medium" });
+  } catch {
+    return "";
+  }
 }
 
 function derivePracticeSignals(messages) {
@@ -138,6 +148,13 @@ export default function NeuroChat() {
   const [customDraft, setCustomDraft] = useState("");
   const [generatedCustomScenario, setGeneratedCustomScenario] = useState(null);
   const [showHintsInChat, setShowHintsInChat] = useState(true);
+  const [pacingMode, setPacingMode] = useState(false);
+  const [replaySourceSession, setReplaySourceSession] = useState(null);
+  const [shareCardUrl, setShareCardUrl] = useState("");
+  const [adminOrgIdInput, setAdminOrgIdInput] = useState("");
+  const [adminData, setAdminData] = useState(null);
+  const [adminLoading, setAdminLoading] = useState(false);
+  const [adminError, setAdminError] = useState("");
   const [explainIdx, setExplainIdx] = useState(null);
   const [explainText, setExplainText] = useState("");
   const [explainLoading, setExplainLoading] = useState(false);
@@ -233,6 +250,7 @@ export default function NeuroChat() {
       setCustomLibrary(Array.isArray(parsed.guestCustomLibrary) ? parsed.guestCustomLibrary : []);
       setPreparePlan(parsed.guestPreparePlan ?? null);
       setShowHintsInChat(parsed.guestShowHints !== false);
+      setPacingMode(parsed.guestPacingMode === true);
       setMood(parsed.mood ?? null);
       setMoodHistory(Array.isArray(parsed.moodHistory) ? parsed.moodHistory : []);
       setHasOnboarded(Boolean(parsed.hasOnboarded));
@@ -259,6 +277,7 @@ export default function NeuroChat() {
       guestCustomLibrary: customLibrary,
       guestPreparePlan: preparePlan,
       guestShowHints: showHintsInChat,
+      guestPacingMode: pacingMode,
       ...overrides,
     };
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -274,6 +293,7 @@ export default function NeuroChat() {
     updatedUnlockedContent,
     preparePlan: preparePlanArg,
     showHints: showHintsArg,
+    pacingMode: pacingModeArg,
   }) => {
     if (!authUser?.id) return;
     try {
@@ -291,6 +311,7 @@ export default function NeuroChat() {
           hasOnboarded: onboarded,
           preparePlan: preparePlanArg !== undefined ? preparePlanArg : preparePlan,
           showHints: showHintsArg !== undefined ? showHintsArg : showHintsInChat,
+          pacingMode: pacingModeArg !== undefined ? pacingModeArg : pacingMode,
         }),
       });
     } catch (error) {
@@ -313,6 +334,7 @@ export default function NeuroChat() {
       guestCustomLibrary: customLibrary,
       guestPreparePlan: preparePlan,
       guestShowHints: showHintsInChat,
+      guestPacingMode: pacingMode,
     };
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   }, [
@@ -328,6 +350,7 @@ export default function NeuroChat() {
     customLibrary,
     preparePlan,
     showHintsInChat,
+    pacingMode,
     isGuest,
   ]);
 
@@ -391,7 +414,7 @@ export default function NeuroChat() {
       const [profileResult, progressResult] = await Promise.all([
         supabase
           .from("profiles")
-          .select("has_onboarded,mood_history,last_mood,prepare_plan,show_hints")
+          .select("has_onboarded,mood_history,last_mood,prepare_plan,show_hints,pacing_mode")
           .eq("id", sessionUser.id)
           .maybeSingle(),
         supabase
@@ -407,6 +430,7 @@ export default function NeuroChat() {
       setHasOnboarded(Boolean(profile?.has_onboarded));
       setPreparePlan(profile?.prepare_plan ?? null);
       setShowHintsInChat(profile?.show_hints !== false);
+      setPacingMode(profile?.pacing_mode === true);
       setMood(profile?.last_mood ?? null);
       setMoodHistory(Array.isArray(profile?.mood_history) ? profile.mood_history : []);
       setCompletedScenarios(Array.isArray(progress?.completed_scenarios) ? progress.completed_scenarios : []);
@@ -525,8 +549,11 @@ export default function NeuroChat() {
     }
   };
 
-  const startScenario = (scenario) => {
+  const startScenario = (scenario, options = {}) => {
     setSelectedScenario(scenario);
+    if (!options.keepReplayContext) {
+      setReplaySourceSession(null);
+    }
     setMessages([{ sender: "ai", text: scenario.opener }]);
     setTurnCount(0);
     setShowSuggestion(false);
@@ -755,7 +782,9 @@ export default function NeuroChat() {
         if (!aiReply) {
           throw new Error("Conversation API returned empty response");
         }
-
+        if (pacingMode) {
+          await new Promise((resolve) => window.setTimeout(resolve, 2000));
+        }
         setMessages((prev) => [...prev, { sender: "ai", text: aiReply }]);
       } catch (error) {
         console.error(error);
@@ -824,6 +853,22 @@ export default function NeuroChat() {
         updatedMoodHistory: moodHistory,
         onboarded: hasOnboarded,
         showHints: next,
+      });
+    }
+  };
+
+  const persistPacingMode = async (next) => {
+    setPacingMode(next);
+    if (isGuest) {
+      saveGuestState({ guestPacingMode: next });
+    } else if (authUser?.id) {
+      await syncProgressToSupabase({
+        updatedCompleted: completedScenarios,
+        updatedBadges: earnedBadges,
+        updatedMood: mood,
+        updatedMoodHistory: moodHistory,
+        onboarded: hasOnboarded,
+        pacingMode: next,
       });
     }
   };
@@ -990,6 +1035,118 @@ export default function NeuroChat() {
       }
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  const startReplayFromSession = (sessionLike) => {
+    const sid = sessionLike?.scenario_id || "";
+    const baseScenario = practiceScenarioList.find((s) => s.id === sid) || scenarioById(sid);
+    const fallbackScenario = {
+      id: sid || `replay-${crypto.randomUUID()}`,
+      title: sessionRowTitle(sessionLike),
+      description: "Replay this conversation with different choices.",
+      opener: sessionLike?.messages?.find((m) => m.sender === "ai")?.text || "Hi, let's continue.",
+      category: "Replay",
+      difficulty: "medium",
+      partnerBrief: "Respond naturally and supportively.",
+      suggested_replies: [],
+      icon: "🔁",
+    };
+    setReplaySourceSession({
+      id: sessionLike?.id || null,
+      title: sessionRowTitle(sessionLike),
+      originalMessages: Array.isArray(sessionLike?.messages) ? sessionLike.messages : [],
+      when: sessionLike?.created_at || null,
+    });
+    startScenario(baseScenario || fallbackScenario, { keepReplayContext: true });
+  };
+
+  const generateShareCard = () => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 1080;
+    canvas.height = 1350;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+    grad.addColorStop(0, "#EBF4FF");
+    grad.addColorStop(1, "#FEF9E7");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.fillStyle = "#1A4971";
+    ctx.font = "700 58px Nunito, sans-serif";
+    ctx.fillText("NeuroChat Progress", 80, 130);
+    ctx.font = "400 34px Nunito, sans-serif";
+    ctx.fillStyle = "#4A5568";
+    ctx.fillText("Small steps count. Keep going.", 80, 185);
+
+    const cards = [
+      { label: "Scenarios", value: String(completedScenarios.length), color: "#2B6CB0" },
+      { label: "Sessions", value: String(totalSessions), color: "#48BB78" },
+      { label: "Badges", value: String(earnedBadges.length), color: "#D69E2E" },
+    ];
+    cards.forEach((item, i) => {
+      const x = 80 + i * 320;
+      ctx.fillStyle = "#FFFFFF";
+      ctx.strokeStyle = "#E2E8F0";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.roundRect(x, 260, 280, 220, 24);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = item.color;
+      ctx.font = "800 70px Nunito, sans-serif";
+      ctx.fillText(item.value, x + 32, 360);
+      ctx.fillStyle = "#4A5568";
+      ctx.font = "600 30px Nunito, sans-serif";
+      ctx.fillText(item.label, x + 32, 420);
+    });
+
+    const daysPractised = Math.max(1, moodHistory.length);
+    ctx.fillStyle = "#1A202C";
+    ctx.font = "700 42px Nunito, sans-serif";
+    ctx.fillText(`Days Practised: ${daysPractised}`, 80, 590);
+    ctx.font = "600 30px Nunito, sans-serif";
+    ctx.fillStyle = "#4A5568";
+    ctx.fillText(`Top badge count: ${earnedBadges.length}`, 80, 640);
+
+    const topScenarioIds = completedScenarios.slice(0, 3);
+    ctx.fillStyle = "#1A202C";
+    ctx.font = "700 34px Nunito, sans-serif";
+    ctx.fillText("Recently completed", 80, 740);
+    ctx.font = "500 28px Nunito, sans-serif";
+    topScenarioIds.forEach((sid, idx) => {
+      const title = scenarioById(sid)?.title || sid;
+      ctx.fillText(`• ${title}`, 100, 790 + idx * 48);
+    });
+
+    ctx.fillStyle = "#718096";
+    ctx.font = "500 24px Nunito, sans-serif";
+    ctx.fillText(`Generated ${new Date().toLocaleDateString()}`, 80, 1230);
+    ctx.fillText("No conversation text is included.", 80, 1270);
+
+    const url = canvas.toDataURL("image/png");
+    setShareCardUrl(url);
+  };
+
+  const loadAdminDashboard = async () => {
+    if (!adminOrgIdInput.trim()) return;
+    setAdminLoading(true);
+    setAdminError("");
+    try {
+      const r = await fetch(`${ADMIN_ORG_ENDPOINT}/${encodeURIComponent(adminOrgIdInput.trim())}`);
+      if (!r.ok) {
+        const payload = await r.json().catch(() => ({}));
+        throw new Error(payload.error || "Failed to load dashboard");
+      }
+      const data = await r.json();
+      setAdminData(data);
+      setScreen("admin-dashboard");
+    } catch (e) {
+      setAdminError(e.message || "Failed to load dashboard");
+    } finally {
+      setAdminLoading(false);
     }
   };
 
@@ -1268,6 +1425,12 @@ export default function NeuroChat() {
           >
             <span style={{ fontSize: 20 }}>❓</span> How This Works
           </button>
+          <button
+            onClick={() => setScreen("settings")}
+            style={{ ...baseBtn, background: colors.card, color: colors.textMuted, padding: "14px 24px", fontSize: 14, border: `1px solid ${colors.border}`, display: "flex", alignItems: "center", gap: 12 }}
+          >
+            <span style={{ fontSize: 18 }}>⚙️</span> Settings
+          </button>
           {authUser ? (
             <button
               onClick={handleSignOut}
@@ -1393,10 +1556,17 @@ export default function NeuroChat() {
           {/* Header */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingTop: 16, paddingBottom: 12, borderBottom: `1px solid ${colors.border}`, flexWrap: "wrap", gap: 8 }}>
             <button onClick={() => setScreen("scenarios")} style={{ ...baseBtn, background: "transparent", color: colors.primary, padding: "8px 0", fontSize: 15 }}>← Back</button>
-            <span style={{ fontFamily: "'Nunito', sans-serif", fontSize: 13, color: colors.textMuted, fontWeight: 600 }}>
-              {turnCount}/{maxTurns} turns
-            </span>
+            {!pacingMode && (
+              <span style={{ fontFamily: "'Nunito', sans-serif", fontSize: 13, color: colors.textMuted, fontWeight: 600 }}>
+                {turnCount}/{maxTurns} turns
+              </span>
+            )}
           </div>
+          {replaySourceSession && (
+            <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 12, color: colors.primaryDark, background: colors.accentLight, borderRadius: 10, padding: "8px 10px", marginTop: 8 }}>
+              🔁 Replay mode: trying different choices from {replaySourceSession.title}
+            </div>
+          )}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8, marginBottom: 4 }}>
             <span style={{ fontFamily: "'Nunito', sans-serif", fontSize: 12, color: colors.textMuted, fontWeight: 600 }}>Social cue hints (?)</span>
             <button
@@ -1544,13 +1714,23 @@ export default function NeuroChat() {
 
           {/* Input area */}
           <div style={{ paddingBottom: 20, paddingTop: 8, borderTop: `1px solid ${colors.border}` }}>
-            {!showSuggestion && (
+            {!showSuggestion && !pacingMode && (
               <button
                 onClick={() => setShowSuggestion(true)}
                 style={{ ...baseBtn, background: "transparent", color: colors.primary, fontSize: 13, padding: "6px 0", marginBottom: 8, fontWeight: 600 }}
               >
                 💡 Feeling stuck? Tap for a suggestion
               </button>
+            )}
+            {pacingMode && currentSuggestion && (
+              <div style={{ marginBottom: 8 }}>
+                <button
+                  onClick={() => setUserInput(currentSuggestion)}
+                  style={{ ...baseBtn, background: colors.primaryLight, color: colors.primaryDark, fontSize: 13, padding: "8px 12px", border: `1px solid ${colors.border}` }}
+                >
+                  💡 Use a suggested reply
+                </button>
+              </div>
             )}
             <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
               <textarea
@@ -1675,6 +1855,20 @@ export default function NeuroChat() {
             </div>
           )}
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <button
+              onClick={() =>
+                startReplayFromSession({
+                  id: `latest-${Date.now()}`,
+                  scenario_id: selectedScenario?.id,
+                  scenario_title: selectedScenario?.title,
+                  messages,
+                  created_at: new Date().toISOString(),
+                })
+              }
+              style={{ ...baseBtn, background: colors.accentLight, color: colors.text, padding: "16px 24px", fontSize: 15, border: `1px solid ${colors.accent}` }}
+            >
+              🔁 Replay with Different Choices
+            </button>
             <button onClick={() => startScenario(selectedScenario)} style={{ ...baseBtn, background: colors.primary, color: "#fff", padding: "16px 24px", fontSize: 16 }}>
               🔄 Try This Scenario Again
             </button>
@@ -1747,6 +1941,16 @@ export default function NeuroChat() {
 
         {progressTab === "overview" ? (
           <>
+            <button
+              type="button"
+              onClick={() => {
+                generateShareCard();
+                setScreen("share-card");
+              }}
+              style={{ ...baseBtn, width: "100%", marginBottom: 14, background: colors.primaryLight, color: colors.primaryDark, padding: "12px 14px", fontSize: 14, border: `1px solid ${colors.border}` }}
+            >
+              🖼️ Share your progress card
+            </button>
             <div style={{ display: "flex", gap: 10, marginBottom: 24, flexWrap: "wrap" }}>
               <div style={{ flex: "1 1 110px", background: colors.primaryLight, borderRadius: 16, padding: "16px 12px", textAlign: "center" }}>
                 <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 28, fontWeight: 800, color: colors.primary }}>{completedScenarios.length}</div>
@@ -1933,6 +2137,23 @@ export default function NeuroChat() {
 
           <button
             type="button"
+            onClick={() => startReplayFromSession(row)}
+            style={{
+              ...baseBtn,
+              width: "100%",
+              marginTop: 8,
+              background: colors.primaryLight,
+              color: colors.primaryDark,
+              padding: "14px 16px",
+              fontSize: 15,
+              border: `1px solid ${colors.border}`,
+            }}
+          >
+            Replay with different choices
+          </button>
+
+          <button
+            type="button"
             onClick={() => deleteSessionRecord(row)}
             style={{
               ...baseBtn,
@@ -2093,6 +2314,152 @@ export default function NeuroChat() {
     </div>
   );
 
+  const renderSettings = () => (
+    <div style={{ minHeight: "100vh", background: colors.bg }}>
+      <div style={{ maxWidth: 420, margin: "0 auto", padding: "0 20px", paddingBottom: 40 }}>
+        <div style={{ display: "flex", alignItems: "center", paddingTop: 20, paddingBottom: 16 }}>
+          <button onClick={() => setScreen("home")} style={{ ...baseBtn, background: "transparent", color: colors.primary, padding: "8px 0", fontSize: 15 }}>
+            ← Back
+          </button>
+        </div>
+        <h2 style={{ fontFamily: "'Nunito', sans-serif", fontSize: 24, fontWeight: 800, color: colors.primaryDark, margin: "0 0 10px 0" }}>Settings</h2>
+        <div style={{ background: colors.card, border: `1px solid ${colors.border}`, borderRadius: 14, padding: "14px 16px", marginBottom: 14 }}>
+          <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 15, fontWeight: 700, color: colors.text, marginBottom: 6 }}>Conversation pacing</div>
+          <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 13, color: colors.textMuted, lineHeight: 1.5, marginBottom: 10 }}>
+            Give me more time to think: waits 2 extra seconds before AI replies, hides the turn counter, and keeps suggestions always available.
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={pacingMode}
+            onClick={() => persistPacingMode(!pacingMode)}
+            style={{ ...baseBtn, background: pacingMode ? colors.green : colors.border, color: pacingMode ? "#fff" : colors.textMuted, fontSize: 13, padding: "8px 14px", borderRadius: 999 }}
+          >
+            {pacingMode ? "Pacing mode: On" : "Pacing mode: Off"}
+          </button>
+        </div>
+
+        <div style={{ background: colors.card, border: `1px solid ${colors.border}`, borderRadius: 14, padding: "14px 16px" }}>
+          <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 15, fontWeight: 700, color: colors.text, marginBottom: 6 }}>Institution admin dashboard (MVP)</div>
+          <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 13, color: colors.textMuted, lineHeight: 1.5, marginBottom: 10 }}>
+            Enter your organisation ID to load aggregated anonymised stats.
+          </div>
+          <input
+            value={adminOrgIdInput}
+            onChange={(e) => {
+              setAdminOrgIdInput(e.target.value);
+              setAdminError("");
+            }}
+            placeholder="Organisation UUID"
+            style={{ width: "100%", boxSizing: "border-box", fontFamily: "'Nunito', sans-serif", fontSize: 14, borderRadius: 10, border: `1px solid ${colors.border}`, padding: "10px 12px", marginBottom: 10 }}
+          />
+          <button onClick={loadAdminDashboard} disabled={adminLoading || !adminOrgIdInput.trim()} style={{ ...baseBtn, width: "100%", background: adminLoading || !adminOrgIdInput.trim() ? colors.border : colors.primary, color: "#fff", padding: "12px 14px", fontSize: 14 }}>
+            {adminLoading ? "Loading dashboard…" : "Open admin dashboard"}
+          </button>
+          {adminError && <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 12, color: "#9C4221", marginTop: 8 }}>{adminError}</div>}
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderShareCard = () => (
+    <div style={{ minHeight: "100vh", background: colors.bg }}>
+      <div style={{ maxWidth: 420, margin: "0 auto", padding: "0 20px", paddingBottom: 40 }}>
+        <div style={{ display: "flex", alignItems: "center", paddingTop: 20, paddingBottom: 16 }}>
+          <button onClick={() => setScreen("progress")} style={{ ...baseBtn, background: "transparent", color: colors.primary, padding: "8px 0", fontSize: 15 }}>
+            ← Progress
+          </button>
+        </div>
+        <h2 style={{ fontFamily: "'Nunito', sans-serif", fontSize: 24, fontWeight: 800, color: colors.primaryDark, margin: "0 0 8px 0" }}>Share your progress</h2>
+        <p style={{ fontFamily: "'Nunito', sans-serif", fontSize: 14, color: colors.textMuted, marginBottom: 12 }}>
+          This card contains only progress stats. No conversation text is included.
+        </p>
+        {shareCardUrl ? (
+          <img src={shareCardUrl} alt="NeuroChat progress card" style={{ width: "100%", borderRadius: 14, border: `1px solid ${colors.border}`, boxShadow: colors.shadow }} />
+        ) : (
+          <div style={{ background: colors.card, border: `1px solid ${colors.border}`, borderRadius: 14, padding: "20px", fontFamily: "'Nunito', sans-serif", fontSize: 14, color: colors.textMuted, textAlign: "center" }}>
+            No card yet. Generate one from Progress.
+          </div>
+        )}
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12 }}>
+          <button onClick={generateShareCard} style={{ ...baseBtn, width: "100%", background: colors.primary, color: "#fff", padding: "14px 16px", fontSize: 15 }}>
+            Regenerate card
+          </button>
+          {shareCardUrl && (
+            <a href={shareCardUrl} download="neurochat-progress-card.png" style={{ ...baseBtn, width: "100%", background: colors.card, color: colors.primaryDark, padding: "14px 16px", fontSize: 15, border: `1px solid ${colors.border}`, textAlign: "center", textDecoration: "none" }}>
+              Download PNG
+            </a>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderAdminDashboard = () => (
+    <div style={{ minHeight: "100vh", background: colors.bg }}>
+      <div style={{ maxWidth: 420, margin: "0 auto", padding: "0 20px", paddingBottom: 40 }}>
+        <div style={{ display: "flex", alignItems: "center", paddingTop: 20, paddingBottom: 16 }}>
+          <button onClick={() => setScreen("settings")} style={{ ...baseBtn, background: "transparent", color: colors.primary, padding: "8px 0", fontSize: 15 }}>
+            ← Settings
+          </button>
+        </div>
+        <h2 style={{ fontFamily: "'Nunito', sans-serif", fontSize: 24, fontWeight: 800, color: colors.primaryDark, margin: "0 0 8px 0" }}>
+          {adminData?.organisation?.name || "Institution Dashboard"}
+        </h2>
+        <p style={{ fontFamily: "'Nunito', sans-serif", fontSize: 13, color: colors.textMuted, marginBottom: 14 }}>
+          Anonymised aggregate data only. No transcripts or mood data shown.
+        </p>
+        {adminData ? (
+          <>
+            <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
+              {[
+                { label: "Users", value: adminData.totals?.users ?? 0 },
+                { label: "Total sessions", value: adminData.totals?.totalSessions ?? 0 },
+                { label: "Active (7d)", value: adminData.totals?.activeLast7Days ?? 0 },
+              ].map((kpi) => (
+                <div key={kpi.label} style={{ flex: "1 1 110px", background: colors.card, border: `1px solid ${colors.border}`, borderRadius: 12, padding: "12px 10px", textAlign: "center" }}>
+                  <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 24, fontWeight: 800, color: colors.primaryDark }}>{kpi.value}</div>
+                  <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 12, color: colors.textMuted }}>{kpi.label}</div>
+                </div>
+              ))}
+            </div>
+
+            <h3 style={{ fontFamily: "'Nunito', sans-serif", fontSize: 16, fontWeight: 800, color: colors.primaryDark, marginBottom: 8 }}>Most popular scenarios</h3>
+            <div style={{ background: colors.card, border: `1px solid ${colors.border}`, borderRadius: 12, padding: "10px 12px", marginBottom: 14 }}>
+              {(adminData.topScenarios || []).length === 0 ? (
+                <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 13, color: colors.textMuted }}>No sessions yet.</div>
+              ) : (
+                (adminData.topScenarios || []).map((row) => (
+                  <div key={row.scenarioId} style={{ display: "flex", justifyContent: "space-between", fontFamily: "'Nunito', sans-serif", fontSize: 13, color: colors.text, padding: "5px 0" }}>
+                    <span>{scenarioById(row.scenarioId)?.title || row.scenarioId}</span>
+                    <strong>{row.count}</strong>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <h3 style={{ fontFamily: "'Nunito', sans-serif", fontSize: 16, fontWeight: 800, color: colors.primaryDark, marginBottom: 8 }}>User progress snapshot</h3>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {(adminData.userStats || []).map((u) => (
+                <div key={u.userId} style={{ background: colors.card, border: `1px solid ${colors.border}`, borderRadius: 12, padding: "10px 12px" }}>
+                  <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 12, color: colors.textMuted }}>{u.role} · {u.userId.slice(0, 8)}…</div>
+                  <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 13, color: colors.text, marginTop: 4 }}>
+                    {u.totalSessions} sessions · {u.completedScenarios} scenarios · {u.badgesEarned} badges
+                  </div>
+                  <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 11, color: colors.textMuted, marginTop: 2 }}>
+                    Last active: {formatDateShort(u.lastActive) || "—"}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 14, color: colors.textMuted }}>No admin data loaded yet.</div>
+        )}
+      </div>
+    </div>
+  );
+
   const renderTips = () => {
     const selectedCat = tipsData.find((c) => c.category === selectedTipCategoryKey);
     return (
@@ -2210,6 +2577,9 @@ export default function NeuroChat() {
       {screen === "history-review" && historyReview && renderHistoryReview()}
       {screen === "prepare-tomorrow" && renderPrepareTomorrow()}
       {screen === "custom-build" && renderCustomBuild()}
+      {screen === "settings" && renderSettings()}
+      {screen === "share-card" && renderShareCard()}
+      {screen === "admin-dashboard" && renderAdminDashboard()}
       {screen === "tips" && renderTips()}
       {screen === "howto" && renderHowTo()}
       {toastMessage && (
