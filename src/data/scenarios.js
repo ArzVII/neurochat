@@ -12,7 +12,7 @@ export const SCENARIOS = [
   {
     id: "work-intro",
     title: "Introducing Yourself at Work",
-    icon: "👋",
+    icon: "hand",
     description: "You've just started a new job and a colleague approaches you.",
     opener: "Hi, I don't think we've met before. What's your name?",
     category: "Work",
@@ -23,7 +23,7 @@ export const SCENARIOS = [
   {
     id: "job-interview",
     title: "Job Interview",
-    icon: "💼",
+    icon: "briefcase",
     description: "You're meeting an interviewer for the first time.",
     opener: "Welcome! Thanks for coming in. So, tell me a bit about yourself.",
     category: "Work",
@@ -34,7 +34,7 @@ export const SCENARIOS = [
   {
     id: "small-talk",
     title: "Small Talk at Work",
-    icon: "☕",
+    icon: "cup",
     description: "A colleague starts chatting by the kettle.",
     opener: "Morning! Did you have a good weekend?",
     category: "Work",
@@ -45,7 +45,7 @@ export const SCENARIOS = [
   {
     id: "boss-help",
     title: "Asking Your Boss for Help",
-    icon: "🙏",
+    icon: "hand",
     description: "You need clarity or support on a task and want to ask without seeming incapable.",
     opener: "Hey — got a minute? I'm a bit stuck on something and wanted your take.",
     category: "Work",
@@ -56,7 +56,7 @@ export const SCENARIOS = [
   {
     id: "criticism-manager",
     title: "Receiving Criticism from a Manager",
-    icon: "📋",
+    icon: "shield",
     description: "Your manager brings up something they want you to improve.",
     opener: "I wanted to chat through one thing — last week's report missed a couple of details we talked about.",
     category: "Work",
@@ -67,7 +67,7 @@ export const SCENARIOS = [
   {
     id: "meeting-speakup",
     title: "Speaking Up in a Meeting",
-    icon: "🎤",
+    icon: "spark",
     description: "You want to share an idea in a room full of colleagues.",
     opener: "Right, thanks everyone — does anyone have thoughts on the timeline before we wrap?",
     category: "Work",
@@ -79,7 +79,7 @@ export const SCENARIOS = [
   {
     id: "meeting-new",
     title: "Meeting Someone New",
-    icon: "🤝",
+    icon: "hand",
     description: "You're at a social event and someone introduces themselves.",
     opener: "Hey! I'm Alex. I think we know some of the same people — how do you know the host?",
     category: "Social",
@@ -90,7 +90,7 @@ export const SCENARIOS = [
   {
     id: "ending-convo",
     title: "Ending a Conversation Politely",
-    icon: "👋",
+    icon: "hand",
     description: "You want to leave a conversation without being rude.",
     opener: "So yeah, that's basically what happened! Anyway, what are you up to later?",
     category: "Social",
@@ -101,7 +101,7 @@ export const SCENARIOS = [
   {
     id: "group-convo",
     title: "Joining a Group Conversation",
-    icon: "👥",
+    icon: "bubbles",
     description: "You approach a circle already talking and want to participate comfortably.",
     opener: "…and that's why we ended up taking the longer route. Sorry — were we blocking the snacks?",
     category: "Social",
@@ -112,7 +112,7 @@ export const SCENARIOS = [
   {
     id: "plans-friend",
     title: "Making Plans with a Friend",
-    icon: "📅",
+    icon: "calendar",
     description: "You want to suggest hanging out without pressure.",
     opener: "I've been meaning to actually catch up properly — when are you usually free-ish?",
     category: "Social",
@@ -123,7 +123,7 @@ export const SCENARIOS = [
   {
     id: "reconnect-longtime",
     title: "Reconnecting After a Long Time",
-    icon: "🕊️",
+    icon: "spark",
     description: "You bump into someone you haven't spoken to in years.",
     opener: "Oh wow — is that you? It's been forever. How have you been?",
     category: "Social",
@@ -135,7 +135,7 @@ export const SCENARIOS = [
   {
     id: "asking-help",
     title: "Asking for Help",
-    icon: "🙋",
+    icon: "hand",
     description: "You need to ask a colleague or teacher for help with something.",
     opener: "Hey, you look like you've got a question. What's up?",
     category: "Everyday",
@@ -146,7 +146,7 @@ export const SCENARIOS = [
   {
     id: "phone-call",
     title: "Making a Phone Call",
-    icon: "📞",
+    icon: "question",
     description: "You need to call to make an appointment or ask a question.",
     opener: "Hello, you're through to the reception desk. How can I help you?",
     category: "Everyday",
@@ -157,7 +157,7 @@ export const SCENARIOS = [
   {
     id: "restaurant-order",
     title: "Ordering at a Restaurant",
-    icon: "🍽️",
+    icon: "cup",
     description: "You're ordering food with simple preferences or allergies.",
     opener: "Hi folks — what can I get started for you tonight?",
     category: "Everyday",
@@ -168,7 +168,7 @@ export const SCENARIOS = [
   {
     id: "shop-return",
     title: "Returning an Item to a Shop",
-    icon: "🛍️",
+    icon: "briefcase",
     description: "You need to return something that wasn't right.",
     opener: "Hi there — how can I help today?",
     category: "Everyday",
@@ -179,7 +179,7 @@ export const SCENARIOS = [
   {
     id: "neighbour-chat",
     title: "Small Talk with a Neighbour",
-    icon: "🏡",
+    icon: "sun",
     description: "You cross paths outside and want a low-key chat.",
     opener: "Morning — freezing today, isn't it? Are you off somewhere nice?",
     category: "Everyday",
@@ -191,7 +191,7 @@ export const SCENARIOS = [
   {
     id: "handling-conflict",
     title: "Handling Conflict",
-    icon: "⚡",
+    icon: "shield",
     description: "Someone is upset with you about something. You need to respond calmly.",
     opener:
       "I'm a bit frustrated because I feel like my message wasn't heard earlier. Can we talk about it?",
@@ -203,7 +203,7 @@ export const SCENARIOS = [
   {
     id: "say-no-friend",
     title: "Saying No to a Friend",
-    icon: "🚫",
+    icon: "shield",
     description: "You need to decline an invite without hurting the friendship.",
     opener: "So we're thinking Saturday night — you'd be up for it, right?",
     category: "Difficult",
@@ -214,7 +214,7 @@ export const SCENARIOS = [
   {
     id: "rude-person",
     title: "Dealing with Someone Being Rude",
-    icon: "😤",
+    icon: "shield",
     description: "Someone speaks dismissively to you in public.",
     opener: "Can you hurry up? Some of us actually have places to be.",
     category: "Difficult",
@@ -225,7 +225,7 @@ export const SCENARIOS = [
   {
     id: "apologise-wrong",
     title: "Apologising When You're Wrong",
-    icon: "💔",
+    icon: "heart",
     description: "You need to own a mistake sincerely.",
     opener: "Hey — I heard what happened. I'm really not okay with how that went down.",
     category: "Difficult",
@@ -236,7 +236,7 @@ export const SCENARIOS = [
   {
     id: "disagree-respect",
     title: "Disagreeing Respectfully",
-    icon: "⚖️",
+    icon: "shield",
     description: "You disagree with someone's take and want to stay respectful.",
     opener: "Honestly I think we're seeing this really differently — but I'm curious what I'm missing.",
     category: "Difficult",
@@ -248,7 +248,7 @@ export const SCENARIOS = [
   {
     id: "ask-date",
     title: "Asking Someone on a Date",
-    icon: "💕",
+    icon: "heart",
     description: "You want to ask someone out clearly but kindly.",
     opener: "Hey — random question. Would you want to grab coffee sometime, just us?",
     category: "Relationships",
@@ -259,7 +259,7 @@ export const SCENARIOS = [
   {
     id: "partner-difficult",
     title: "Difficult Conversation with a Partner",
-    icon: "💬",
+    icon: "bubble",
     description: "You need to raise something sensitive with your partner.",
     opener: "I've been carrying something around and I think we should talk about it properly.",
     category: "Relationships",
@@ -270,7 +270,7 @@ export const SCENARIOS = [
   {
     id: "boundary-friend",
     title: "Setting a Boundary with a Friend",
-    icon: "🧱",
+    icon: "shield",
     description: "You need to set a limit without ending the friendship.",
     opener: "You're okay with X, right? It's only an hour or two.",
     category: "Relationships",
@@ -281,7 +281,7 @@ export const SCENARIOS = [
   {
     id: "hard-truth-friend",
     title: "Telling a Friend Something They Don't Want to Hear",
-    icon: "📣",
+    icon: "spark",
     description: "You need to say something uncomfortable but important.",
     opener: "Okay… I'm going to say this because I care about you, not because I want drama.",
     category: "Relationships",
@@ -293,7 +293,7 @@ export const SCENARIOS = [
   {
     id: "accommodations",
     title: "Asking for Accommodations at Work/School",
-    icon: "📚",
+    icon: "briefcase",
     description: "You need adjustments so you can work or learn effectively.",
     opener: "Thanks for meeting — what did you want to run through today?",
     category: "Self-Advocacy",
@@ -304,7 +304,7 @@ export const SCENARIOS = [
   {
     id: "doctor-needs",
     title: "Explaining Your Needs to a Doctor",
-    icon: "🩺",
+    icon: "question",
     description: "You want to describe symptoms and concerns clearly in limited time.",
     opener: "Right — we've got ten minutes. What's brought you in today?",
     category: "Self-Advocacy",
@@ -315,7 +315,7 @@ export const SCENARIOS = [
   {
     id: "stand-up-self",
     title: "Standing Up for Yourself Without Aggression",
-    icon: "🛡️",
+    icon: "shield",
     description: "Someone pushes past you in tone — you want to respond firmly but calmly.",
     opener: "Look — I'm not trying to argue, but that tone isn't okay.",
     category: "Self-Advocacy",
@@ -326,7 +326,7 @@ export const SCENARIOS = [
   {
     id: "negotiate-deadline",
     title: "Negotiating (Price, Deadline, etc.)",
-    icon: "🤝",
+    icon: "hand",
     description: "You negotiate for more time or a fairer outcome.",
     opener: "The earliest we can do is Friday — that's already stretching things.",
     category: "Self-Advocacy",
@@ -338,7 +338,7 @@ export const SCENARIOS = [
   {
     id: "bonus-transport",
     title: "Talking to a Stranger on Public Transport",
-    icon: "🚌",
+    icon: "calendar",
     description: "You're seated next to someone — brief, optional chat.",
     opener: "Sorry — do you know if this one stops at [station]? My phone's being weird.",
     category: "Bonus",
@@ -350,7 +350,7 @@ export const SCENARIOS = [
   {
     id: "bonus-compliment",
     title: "Complimenting Someone",
-    icon: "✨",
+    icon: "spark",
     description: "You want to give a genuine compliment without awkwardness.",
     opener: "Hey — sorry to bother you, I just wanted to say your presentation earlier was really clear.",
     category: "Bonus",
@@ -362,7 +362,7 @@ export const SCENARIOS = [
   {
     id: "bonus-directions",
     title: "Asking for Directions",
-    icon: "🧭",
+    icon: "question",
     description: "You're a bit lost and need quick help.",
     opener: "Excuse me — do you know where [place] is from here? I'm hopeless with maps.",
     category: "Bonus",
@@ -556,72 +556,72 @@ export function migrateEarnedBadges(ids) {
 export const BADGES = [
   {
     id: "first-steps",
-    icon: "🌱",
+    icon: "leaf",
     name: "First Steps",
     desc: "Had your first practice",
-    toast: "🌱 You just had your first practice. That took courage.",
+    toast: "You just had your first practice. That took courage.",
   },
   {
     id: "growing",
-    icon: "🌿",
+    icon: "leaf",
     name: "Growing",
     desc: "Completed 3 different scenarios",
-    toast: "🌿 Three scenarios practised — you're building real momentum.",
+    toast: "Three scenarios practised — you're building real momentum.",
   },
   {
     id: "rooted",
-    icon: "🌳",
+    icon: "heart",
     name: "Rooted",
     desc: "Completed 5 different scenarios",
-    toast: "🌳 Five scenarios done — steady progress adds up.",
+    toast: "Five scenarios done — steady progress adds up.",
   },
   {
     id: "thoughtful",
-    icon: "🦋",
+    icon: "spark",
     name: "Thoughtful",
     desc: "Added detail in your responses",
-    toast: "🦋 You brought thoughtful detail into your replies.",
+    toast: "You brought thoughtful detail into your replies.",
   },
   {
     id: "curious",
-    icon: "🐝",
+    icon: "question",
     name: "Curious",
     desc: "Asked a question back",
-    toast: "🐝 You asked something back — curiosity builds connection.",
+    toast: "You asked something back — curiosity builds connection.",
   },
   {
     id: "explorer",
-    icon: "🦉",
+    icon: "trophy",
     name: "Explorer",
     desc: "Tried scenarios from every category",
-    toast: "🦉 You've explored every category — brilliant breadth.",
+    toast: "You've explored every category — brilliant breadth.",
   },
   {
     id: "brave",
-    icon: "🌊",
+    icon: "shield",
     name: "Brave",
     desc: "Completed a Difficult scenario",
-    toast: "🌊 You tackled a difficult scenario. That's brave.",
+    toast: "You tackled a difficult scenario. That's brave.",
   },
   {
     id: "dedicated",
-    icon: "🔥",
+    icon: "chart",
     name: "Dedicated",
     desc: "Completed 10 practice sessions",
-    toast: "🔥 Ten sessions logged — dedication shows.",
+    toast: "Ten sessions logged — dedication shows.",
   },
   {
     id: "all-rounder",
-    icon: "🌈",
+    icon: "bubbles",
     name: "All-Rounder",
     desc: "Completed easy, medium, and challenging scenarios",
-    toast: "🌈 You've sampled every difficulty tag — great range.",
+    toast: "You've sampled every difficulty tag — great range.",
   },
   {
     id: "summit",
-    icon: "🏔️",
+    icon: "trophy",
     name: "Summit",
     desc: "Completed 20 different scenarios",
-    toast: "🏔️ Twenty scenarios — that's Summit-level practice.",
+    toast: "Twenty scenarios — that's Summit-level practice.",
   },
 ];

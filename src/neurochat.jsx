@@ -9,6 +9,39 @@ import {
   SUGGESTED_REPLIES,
 } from "./data/scenarios";
 import { getTipsCategories } from "./data/tips";
+import { NC, NC_CAT, categoryToNcKey, catColor } from "./theme/tokens";
+import { NCIcon } from "./components/nc/NCIcon";
+import { NCMark, NCThread, ConversationThreadLine } from "./components/nc/Brand";
+import {
+  Paper,
+  ScreenColumn,
+  TopBar,
+  Eyebrow,
+  H1,
+  H2,
+  Body,
+  PrimaryButton,
+  GhostButton,
+  Card,
+  Chip,
+  Toggle,
+} from "./components/nc/ui";
+import { ScenarioCard } from "./components/nc/ScenarioCard";
+import {
+  SecondaryTile,
+  FilterPill,
+  MoodOptionCard,
+  OnboardingDot,
+  FeedbackCard,
+  FBPoint,
+  StatCard,
+  BadgeTile,
+  RecentRow,
+  TipRow,
+  SettingsGroup,
+  SettingsRow,
+  TurnDot,
+} from "./components/nc/blocks";
 
 const CONVERSATION_ENDPOINT = "/api/conversation";
 const FEEDBACK_ENDPOINT = "/api/feedback";
@@ -73,40 +106,6 @@ function derivePracticeSignals(messages) {
   return { userMsgs, hasQuestion, hasDetail };
 }
 
-// ─── STYLES ───
-const colors = {
-  bg: "#F5F7FA",
-  card: "#FFFFFF",
-  primary: "#2B6CB0",
-  primaryLight: "#EBF4FF",
-  primaryDark: "#1A4971",
-  accent: "#F6C94E",
-  accentLight: "#FEF9E7",
-  green: "#48BB78",
-  greenLight: "#F0FFF4",
-  greenBorder: "#C6F6D5",
-  amber: "#ED8936",
-  amberLight: "#FFFAF0",
-  amberBorder: "#FEEBC8",
-  text: "#1A202C",
-  textMuted: "#718096",
-  border: "#E2E8F0",
-  chatBubbleAI: "#EBF4FF",
-  chatBubbleUser: "#FEF9E7",
-  shadow: "0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06)",
-  shadowLg: "0 4px 14px rgba(0,0,0,0.08)",
-};
-
-const baseBtn = {
-  border: "none",
-  borderRadius: 14,
-  cursor: "pointer",
-  fontFamily: "'Nunito', sans-serif",
-  fontWeight: 700,
-  transition: "all 0.2s ease",
-  outline: "none",
-};
-
 export default function NeuroChat() {
   const [isBootstrapping, setIsBootstrapping] = useState(true);
   const [emailInput, setEmailInput] = useState("");
@@ -116,6 +115,7 @@ export default function NeuroChat() {
   const [authUser, setAuthUser] = useState(null);
   const [isGuest, setIsGuest] = useState(true);
   const [screen, setScreen] = useState("home");
+  const [scenarioCategoryFilter, setScenarioCategoryFilter] = useState(null);
   const [selectedScenario, setSelectedScenario] = useState(null);
   const [messages, setMessages] = useState([]);
   const [userInput, setUserInput] = useState("");
@@ -181,7 +181,7 @@ export default function NeuroChat() {
         difficulty: "medium",
         partnerBrief: row.ai_personality || "",
         suggested_replies: Array.isArray(row.suggested_replies) ? row.suggested_replies : [],
-        icon: "✨",
+        icon: "spark",
         savedCustomId: row.id,
       })),
     [customLibrary],
@@ -191,6 +191,11 @@ export default function NeuroChat() {
     () => [...visibleScenarios, ...customAsScenarios],
     [visibleScenarios, customAsScenarios],
   );
+
+  const filteredPracticeList = useMemo(() => {
+    if (!scenarioCategoryFilter) return practiceScenarioList;
+    return practiceScenarioList.filter((s) => categoryToNcKey(s.category) === scenarioCategoryFilter);
+  }, [practiceScenarioList, scenarioCategoryFilter]);
 
   const combinedHistoryRows = useMemo(() => {
     const guest = guestSessions.map((g) => ({
@@ -230,12 +235,37 @@ export default function NeuroChat() {
   }, []);
 
   const moodOptions = [
-    { id: "good", emoji: "😊", label: "Feeling good", bg: "#F0FFF4", border: "#9AE6B4", text: colors.green, hint: "Want to try something new today?" },
-    { id: "okay", emoji: "😐", label: "Doing okay", bg: "#FFFAF0", border: "#FBD38D", text: "#B7791F", hint: "Maybe a familiar scenario?" },
-    { id: "low", emoji: "😔", label: "Bit low", bg: "#FAF5FF", border: "#D6BCFA", text: "#6B46C1", hint: "Go easy on yourself today. Something short?" },
+    {
+      id: "good",
+      iconKey: "sun",
+      label: "Feeling good",
+      bg: NC.sageSoft,
+      border: NC.sage,
+      text: NC.sage,
+      hint: "Want to try something new today?",
+      subtle: "Energy is steady.",
+    },
+    {
+      id: "okay",
+      iconKey: "cloud",
+      label: "Doing okay",
+      bg: NC.butterSoft,
+      border: NC.butter,
+      text: "#8A6A1F",
+      hint: "Maybe a familiar scenario?",
+      subtle: "A little in-between.",
+    },
+    {
+      id: "low",
+      iconKey: "moon",
+      label: "A bit low",
+      bg: NC.mauveSoft,
+      border: NC.mauve,
+      text: "#5F4F70",
+      hint: "Go easy on yourself today. Something short?",
+      subtle: "Be gentle with yourself.",
+    },
   ];
-
-  const moodConfig = moodOptions.find((option) => option.id === mood);
 
   const loadGuestState = () => {
     try {
@@ -635,20 +665,20 @@ export default function NeuroChat() {
         if (uniq >= 3) {
           addUnlock(
             "bonus-pack-1",
-            "🎁 You've unlocked 3 bonus scenarios — find them in the scenario list.",
+            "You've unlocked 3 bonus scenarios — find them in the scenario list.",
           );
         }
         if (uniq >= 5) {
           addUnlock(
             "tips-advanced-convo",
-            "📚 You've unlocked Advanced Conversation Techniques — open Tips Library.",
+            "You've unlocked Advanced Conversation Techniques — open Tips Library.",
           );
         }
         const hadPriorDifficult = priorCompleted.some((sid) => scenarioById(sid)?.category === "Difficult");
         if (selectedScenario.category === "Difficult" && !hadPriorDifficult) {
           addUnlock(
             "tips-calm-pressure",
-            "🌊 You've unlocked Staying Calm Under Pressure — open Tips Library.",
+            "You've unlocked Staying Calm Under Pressure — open Tips Library.",
           );
         }
         const coreCatsCovered = CORE_CATEGORIES.every((cat) =>
@@ -657,13 +687,13 @@ export default function NeuroChat() {
         if (coreCatsCovered) {
           addUnlock(
             "feature-custom-scenarios",
-            "🛠️ You've unlocked Custom Scenario Builder — create situations from your real life under Choose a Scenario.",
+            "You've unlocked Custom Scenario Builder — create situations from your real life under Choose a Scenario.",
           );
         }
         if (nextTotalSessions >= 10) {
           addUnlock(
             "feature-conversation-review",
-            "📜 You've unlocked Conversation History — review past sessions under Progress → History.",
+            "You've unlocked Conversation History — review past sessions under Progress → History.",
           );
         }
 
@@ -953,7 +983,7 @@ export default function NeuroChat() {
         difficulty: "medium",
         partnerBrief: gen.partnerBrief,
         suggested_replies: gen.suggested_replies,
-        icon: gen.icon || "💬",
+        icon: gen.icon || "bubble",
       });
     } catch (e) {
       console.error(e);
@@ -1050,7 +1080,7 @@ export default function NeuroChat() {
       difficulty: "medium",
       partnerBrief: "Respond naturally and supportively.",
       suggested_replies: [],
-      icon: "🔁",
+      icon: "replay",
     };
     setReplaySourceSession({
       id: sessionLike?.id || null,
@@ -1068,61 +1098,59 @@ export default function NeuroChat() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-    grad.addColorStop(0, "#EBF4FF");
-    grad.addColorStop(1, "#FEF9E7");
-    ctx.fillStyle = grad;
+    ctx.fillStyle = NC.paper;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    ctx.fillStyle = "#1A4971";
-    ctx.font = "700 58px Nunito, sans-serif";
-    ctx.fillText("NeuroChat Progress", 80, 130);
-    ctx.font = "400 34px Nunito, sans-serif";
-    ctx.fillStyle = "#4A5568";
+    ctx.fillStyle = NC.ink;
+    ctx.font = "600 56px Fraunces, Georgia, serif";
+    ctx.fillText("NeuroChat progress", 80, 130);
+    ctx.font = "400 30px Geist, system-ui, sans-serif";
+    ctx.fillStyle = NC.inkSoft;
     ctx.fillText("Small steps count. Keep going.", 80, 185);
 
     const cards = [
-      { label: "Scenarios", value: String(completedScenarios.length), color: "#2B6CB0" },
-      { label: "Sessions", value: String(totalSessions), color: "#48BB78" },
-      { label: "Badges", value: String(earnedBadges.length), color: "#D69E2E" },
+      { label: "Scenarios", value: String(completedScenarios.length), color: NC.teal },
+      { label: "Sessions", value: String(totalSessions), color: NC.sage },
+      { label: "Badges", value: String(earnedBadges.length), color: NC.butter },
     ];
     cards.forEach((item, i) => {
       const x = 80 + i * 320;
-      ctx.fillStyle = "#FFFFFF";
-      ctx.strokeStyle = "#E2E8F0";
-      ctx.lineWidth = 3;
+      ctx.fillStyle = NC.card;
+      ctx.strokeStyle = NC.cardEdge;
+      ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.roundRect(x, 260, 280, 220, 24);
       ctx.fill();
       ctx.stroke();
       ctx.fillStyle = item.color;
-      ctx.font = "800 70px Nunito, sans-serif";
+      ctx.font = "400 72px Fraunces, Georgia, serif";
       ctx.fillText(item.value, x + 32, 360);
-      ctx.fillStyle = "#4A5568";
-      ctx.font = "600 30px Nunito, sans-serif";
-      ctx.fillText(item.label, x + 32, 420);
+      ctx.fillStyle = NC.inkMute;
+      ctx.font = "600 26px Geist Mono, monospace";
+      ctx.fillText(item.label.toUpperCase(), x + 32, 420);
     });
 
     const daysPractised = Math.max(1, moodHistory.length);
-    ctx.fillStyle = "#1A202C";
-    ctx.font = "700 42px Nunito, sans-serif";
-    ctx.fillText(`Days Practised: ${daysPractised}`, 80, 590);
-    ctx.font = "600 30px Nunito, sans-serif";
-    ctx.fillStyle = "#4A5568";
-    ctx.fillText(`Top badge count: ${earnedBadges.length}`, 80, 640);
+    ctx.fillStyle = NC.ink;
+    ctx.font = "600 38px Fraunces, Georgia, serif";
+    ctx.fillText(`Days practised: ${daysPractised}`, 80, 590);
+    ctx.font = "500 28px Geist, system-ui, sans-serif";
+    ctx.fillStyle = NC.inkSoft;
+    ctx.fillText(`Badges earned: ${earnedBadges.length}`, 80, 640);
 
     const topScenarioIds = completedScenarios.slice(0, 3);
-    ctx.fillStyle = "#1A202C";
-    ctx.font = "700 34px Nunito, sans-serif";
+    ctx.fillStyle = NC.ink;
+    ctx.font = "600 32px Fraunces, Georgia, serif";
     ctx.fillText("Recently completed", 80, 740);
-    ctx.font = "500 28px Nunito, sans-serif";
+    ctx.font = "500 26px Geist, system-ui, sans-serif";
+    ctx.fillStyle = NC.inkSoft;
     topScenarioIds.forEach((sid, idx) => {
       const title = scenarioById(sid)?.title || sid;
       ctx.fillText(`• ${title}`, 100, 790 + idx * 48);
     });
 
-    ctx.fillStyle = "#718096";
-    ctx.font = "500 24px Nunito, sans-serif";
+    ctx.fillStyle = NC.inkMute;
+    ctx.font = "500 22px Geist, system-ui, sans-serif";
     ctx.fillText(`Generated ${new Date().toLocaleDateString()}`, 80, 1230);
     ctx.fillText("No conversation text is included.", 80, 1270);
 
@@ -1181,17 +1209,20 @@ export default function NeuroChat() {
   };
 
   const renderAuthChoice = () => (
-    <div style={{ minHeight: "100vh", background: colors.bg, display: "flex", justifyContent: "center" }}>
-      <div style={{ width: "100%", maxWidth: 420, padding: "48px 20px 40px" }}>
-        <div style={{ textAlign: "center", marginBottom: 20 }}>
-          <div style={{ fontSize: 48, marginBottom: 8 }}>🧠</div>
-          <h1 style={{ fontFamily: "'Nunito', sans-serif", fontSize: 32, color: colors.primaryDark, margin: 0 }}>NeuroChat</h1>
-          <p style={{ fontFamily: "'Nunito', sans-serif", fontSize: 15, color: colors.textMuted, marginTop: 8 }}>Choose how you want to continue.</p>
+    <Paper style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+      <ScreenColumn style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", paddingTop: 40 }}>
+        <NCMark size={56} />
+        <div style={{ fontFamily: NC.serif, fontSize: 30, fontWeight: 500, letterSpacing: "-0.02em", color: NC.ink, marginTop: 18 }}>
+          neurochat
         </div>
-        <div style={{ background: colors.card, border: `1px solid ${colors.border}`, borderRadius: 16, padding: 20 }}>
+        <Body size={15} color={NC.inkMute} style={{ marginTop: 6 }}>
+          practise conversations · safely
+        </Body>
+        <div style={{ width: "100%", marginTop: 36, display: "flex", flexDirection: "column", gap: 12 }}>
           {!isSupabaseConfigured() && (
-            <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 13, color: "#9C4221", background: colors.amberLight, border: `1px solid ${colors.amberBorder}`, borderRadius: 10, padding: "10px 12px", marginBottom: 12 }}>
-              Supabase env vars are missing or invalid. Add SUPABASE_URL and SUPABASE_ANON_KEY to <code style={{ fontFamily: "monospace", fontSize: 12 }}>.env</code>, then restart the dev server.
+            <div style={{ fontSize: 13, color: NC.terracotta, background: NC.terracottaSoft, border: `1px solid ${NC.cardEdge}`, borderRadius: 12, padding: "10px 12px" }}>
+              Supabase env vars are missing or invalid. Add SUPABASE_URL and SUPABASE_ANON_KEY to{" "}
+              <code style={{ fontFamily: NC.mono, fontSize: 12 }}>.env</code>, then restart the dev server.
             </div>
           )}
           <input
@@ -1202,30 +1233,46 @@ export default function NeuroChat() {
             }}
             placeholder="you@example.com"
             disabled={authSending}
-            style={{ width: "100%", boxSizing: "border-box", fontFamily: "'Nunito', sans-serif", fontSize: 15, borderRadius: 12, border: `1px solid ${colors.border}`, padding: "12px 14px", marginBottom: 10 }}
+            style={{
+              background: NC.card,
+              border: `1px solid ${NC.cardEdge}`,
+              borderRadius: 16,
+              padding: "16px 16px",
+              fontFamily: NC.sans,
+              fontSize: 15,
+              color: NC.ink,
+              width: "100%",
+              boxSizing: "border-box",
+            }}
           />
-          <button
-            onClick={sendMagicLink}
-            disabled={authSending}
-            style={{ ...baseBtn, width: "100%", background: authSending ? colors.border : colors.primary, color: "#fff", padding: "14px 16px", fontSize: 15 }}
-          >
+          <PrimaryButton kind="ink" disabled={authSending} onClick={sendMagicLink}>
             {authSending ? "Sending…" : "Continue with email"}
-          </button>
-          <p style={{ fontFamily: "'Nunito', sans-serif", fontSize: 12, color: colors.textMuted, marginTop: 8, marginBottom: 0, lineHeight: 1.5 }}>
-            We'll send you a link. It works for new and existing accounts.
-          </p>
-          {authError && (
-            <p role="alert" style={{ fontFamily: "'Nunito', sans-serif", fontSize: 13, color: "#9C4221", background: colors.amberLight, border: `1px solid ${colors.amberBorder}`, borderRadius: 10, padding: "10px 12px", marginTop: 10 }}>
+          </PrimaryButton>
+          <Body size={12} color={NC.inkMute} style={{ textAlign: "center", padding: "0 12px" }}>
+            We&apos;ll send a magic link. Works for new and existing accounts.
+          </Body>
+          {authError ? (
+            <p role="alert" style={{ fontSize: 13, color: NC.terracotta, background: NC.terracottaSoft, borderRadius: 12, padding: "10px 12px", margin: 0 }}>
               {authError}
             </p>
-          )}
-          {authNotice && !authError && (
-            <p style={{ fontFamily: "'Nunito', sans-serif", fontSize: 13, color: "#276749", marginTop: 10 }}>{authNotice}</p>
-          )}
-          <button onClick={enterGuestMode} style={{ ...baseBtn, width: "100%", marginTop: 10, background: colors.primaryLight, color: colors.primaryDark, padding: "14px 16px", fontSize: 15, border: `1px solid ${colors.border}` }}>Continue as guest</button>
+          ) : null}
+          {authNotice && !authError ? (
+            <p style={{ fontSize: 13, color: NC.sage, margin: 0 }}>{authNotice}</p>
+          ) : null}
+          <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0" }}>
+            <div style={{ flex: 1, height: 1, background: NC.cardEdge }} />
+            <div style={{ fontFamily: NC.mono, fontSize: 11, color: NC.inkMute, textTransform: "uppercase", letterSpacing: "0.12em" }}>or</div>
+            <div style={{ flex: 1, height: 1, background: NC.cardEdge }} />
+          </div>
+          <GhostButton onClick={enterGuestMode}>Continue as guest</GhostButton>
         </div>
-      </div>
-    </div>
+      </ScreenColumn>
+      <ScreenColumn style={{ textAlign: "center", paddingBottom: 24 }}>
+        <Body size={11} color={NC.inkFaint}>
+          By continuing you agree to our gentle terms.
+        </Body>
+      </ScreenColumn>
+    </Paper>
   );
 
   const renderOnboarding = () => {
@@ -1236,7 +1283,7 @@ export default function NeuroChat() {
       },
       {
         title: "How it works",
-        body1: "You'll chat with an AI partner who plays the other person. Afterwards, you'll get gentle feedback - strengths first, always.",
+        body1: "You'll chat with an AI partner who plays the other person. Afterwards, you'll get gentle feedback — strengths first, always.",
         body2: "If you get stuck, tap for a suggestion. There are no wrong answers.",
       },
       {
@@ -1250,295 +1297,508 @@ export default function NeuroChat() {
     const isLast = onboardingStep === pages.length - 1;
 
     return (
-      <div style={{ minHeight: "100vh", background: colors.bg, display: "flex", justifyContent: "center" }}>
-        <div style={{ width: "100%", maxWidth: 420, padding: "56px 20px 40px" }}>
-          <div style={{ background: colors.card, border: `1px solid ${colors.border}`, borderRadius: 18, padding: 24, boxShadow: colors.shadow }}>
-            <p style={{ fontFamily: "'Nunito', sans-serif", fontSize: 12, color: colors.textMuted, marginBottom: 10 }}>Step {onboardingStep + 1} of 3</p>
-            <h2 style={{ fontFamily: "'Nunito', sans-serif", fontSize: 26, margin: "0 0 12px 0", color: colors.primaryDark }}>{page.title}</h2>
-            <p style={{ fontFamily: "'Nunito', sans-serif", fontSize: 15, color: colors.text, lineHeight: 1.7 }}>{page.body1}</p>
-            {page.body2 && <p style={{ fontFamily: "'Nunito', sans-serif", fontSize: 15, color: colors.textMuted, lineHeight: 1.7, marginTop: 8 }}>{page.body2}</p>}
-            <button
-              onClick={() => {
-                if (isLast) {
-                  finishOnboarding();
-                  return;
-                }
-                setOnboardingStep(onboardingStep + 1);
-              }}
-              style={{ ...baseBtn, marginTop: 20, width: "100%", background: colors.primary, color: "#fff", padding: "14px 16px", fontSize: 16 }}
-            >
-              {isLast ? "Let's go" : "Continue"}
-            </button>
+      <Paper style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+        <ScreenColumn style={{ flex: 1, display: "flex", flexDirection: "column", paddingBottom: 16 }}>
+          <TopBar
+            left={
+              <button
+                type="button"
+                onClick={finishOnboarding}
+                style={{ background: "transparent", border: "none", color: NC.inkMute, fontFamily: NC.mono, fontSize: 12, letterSpacing: "0.08em", textTransform: "uppercase", cursor: "pointer" }}
+              >
+                skip
+              </button>
+            }
+            center={`Step ${onboardingStep + 1} of 3`}
+          />
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", paddingTop: 8 }}>
+            {onboardingStep === 0 ? (
+              <>
+                <NCMark size={56} />
+                <H1 style={{ fontSize: 44, marginTop: 28, lineHeight: 1.02 }}>
+                  A quiet room
+                  <br />
+                  for the words
+                  <br />
+                  <span style={{ fontStyle: "italic", color: NC.teal }}>you&apos;re rehearsing.</span>
+                </H1>
+                <div style={{ margin: "20px 0 24px" }}>
+                  <NCThread width={280} height={36} opacity={0.25} />
+                </div>
+              </>
+            ) : (
+              <>
+                <H1 style={{ fontSize: 30, marginBottom: 14 }}>{page.title}</H1>
+              </>
+            )}
+            <Body size={17} style={{ maxWidth: 320 }}>
+              {page.body1}
+            </Body>
+            {page.body2 ? (
+              <Body size={15} color={NC.inkMute} style={{ marginTop: 12, maxWidth: 320 }}>
+                {page.body2}
+              </Body>
+            ) : null}
           </div>
-        </div>
-      </div>
+          <div style={{ display: "flex", justifyContent: "center", gap: 6, padding: "0 0 16px" }}>
+            <OnboardingDot active={onboardingStep === 0} />
+            <OnboardingDot active={onboardingStep === 1} />
+            <OnboardingDot active={onboardingStep === 2} />
+          </div>
+          <PrimaryButton
+            kind="ink"
+            onClick={() => {
+              if (isLast) {
+                finishOnboarding();
+                return;
+              }
+              setOnboardingStep(onboardingStep + 1);
+            }}
+          >
+            {isLast ? "Let's go" : "Continue"}
+          </PrimaryButton>
+        </ScreenColumn>
+      </Paper>
     );
   };
 
   const renderMoodCheckIn = () => (
-    <div style={{ minHeight: "100vh", background: colors.bg, display: "flex", justifyContent: "center" }}>
-      <div style={{ width: "100%", maxWidth: 420, padding: "52px 20px 40px" }}>
-        <h2 style={{ fontFamily: "'Nunito', sans-serif", fontSize: 28, color: colors.primaryDark, margin: "0 0 8px 0" }}>How are you feeling?</h2>
-        <p style={{ fontFamily: "'Nunito', sans-serif", fontSize: 14, color: colors.textMuted, marginBottom: 20 }}>Pick anything that fits right now. You can change it later.</p>
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {moodOptions.map((option) => (
+    <Paper style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+      <ScreenColumn style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+        <TopBar
+          center="Before we begin"
+          right={
             <button
-              key={option.id}
-              onClick={() => chooseMood(option.id)}
-              style={{ ...baseBtn, background: option.bg, color: option.text, border: `1px solid ${option.border}`, borderRadius: 16, textAlign: "left", padding: "14px 16px", fontSize: 16, display: "flex", alignItems: "center", gap: 10 }}
+              type="button"
+              onClick={() => setScreen("home")}
+              style={{ background: "transparent", border: "none", color: NC.inkMute, fontFamily: NC.mono, fontSize: 12, letterSpacing: "0.08em", textTransform: "uppercase", cursor: "pointer" }}
             >
-              <span style={{ fontSize: 22 }}>{option.emoji}</span> {option.label}
+              skip
             </button>
+          }
+        />
+        <div style={{ paddingTop: 28, paddingBottom: 14 }}>
+          <H1>
+            How are you
+            <br />
+            feeling, right now?
+          </H1>
+          <Body style={{ marginTop: 14 }}>Pick anything that fits. You can change it later.</Body>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12, flex: 1, paddingTop: 8 }}>
+          {moodOptions.map((option) => (
+            <MoodOptionCard
+              key={option.id}
+              icon={NCIcon[option.iconKey](28)}
+              label={option.label}
+              sub={option.subtle}
+              color={option.border}
+              bg={option.bg}
+              selected={mood === option.id}
+              onClick={() => chooseMood(option.id)}
+            />
           ))}
         </div>
-        <button onClick={() => setScreen("home")} style={{ ...baseBtn, background: "transparent", color: colors.textMuted, fontSize: 14, marginTop: 14 }}>Skip for now</button>
-      </div>
-    </div>
+        <button
+          type="button"
+          onClick={() => setScreen("home")}
+          style={{
+            marginTop: 16,
+            background: "none",
+            border: "none",
+            color: NC.inkMute,
+            fontFamily: NC.sans,
+            fontSize: 14,
+            cursor: "pointer",
+            padding: "12px 0",
+          }}
+        >
+          Skip for now
+        </button>
+      </ScreenColumn>
+    </Paper>
   );
 
   // ─── RENDER SCREENS ───
 
-  const renderHome = () => (
-    <div style={{ minHeight: "100vh", background: colors.bg, display: "flex", flexDirection: "column", alignItems: "center" }}>
-      <div style={{ width: "100%", maxWidth: 420, padding: "0 20px", paddingBottom: 40 }}>
-        {/* Header */}
-        <div style={{ display: "flex", justifyContent: "flex-end", paddingTop: 16 }}>
-          <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 12, color: colors.textMuted, border: `1px solid ${colors.border}`, borderRadius: 999, padding: "6px 10px", background: colors.card }}>
-            👤 {authUser ? "Signed in" : "Guest"}
-          </div>
-        </div>
-        <div style={{ textAlign: "center", paddingTop: 26, paddingBottom: 10 }}>
-          <div style={{ fontSize: 48, marginBottom: 8 }}>🧠</div>
-          <h1 style={{ fontFamily: "'Nunito', sans-serif", fontSize: 32, fontWeight: 800, color: colors.primaryDark, margin: 0, letterSpacing: -0.5 }}>
-            NeuroChat
-          </h1>
-          <p style={{ fontFamily: "'Nunito', sans-serif", fontSize: 16, color: colors.textMuted, marginTop: 8, lineHeight: 1.5 }}>
-            Practise conversations safely.<br />No pressure. No judgement.
-          </p>
-        </div>
+  const renderHome = () => {
+    const homeTime = new Date().toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+    const moodPhrase =
+      mood === "good" ? "feeling good" : mood === "okay" ? "doing okay" : mood === "low" ? "a bit low" : null;
+    const tipCount = tipsData.reduce((n, c) => n + (c.tips?.length || 0), 0);
+    const scenarioCount = practiceScenarioList.length;
 
-        {/* Main buttons */}
-        {moodConfig && (
-          <div style={{ background: moodConfig.bg, border: `1px solid ${moodConfig.border}`, borderRadius: 14, padding: "10px 12px", marginTop: 20 }}>
-            <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 13, color: moodConfig.text }}>
-              {moodConfig.emoji} {moodConfig.label} - {moodConfig.hint} <button onClick={() => setScreen("mood-checkin")} style={{ ...baseBtn, background: "transparent", color: moodConfig.text, fontSize: 13, textDecoration: "underline", padding: 0 }}>change</button>
+    return (
+      <Paper style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+        <ScreenColumn style={{ flex: 1, display: "flex", flexDirection: "column", paddingTop: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 0 4px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <NCMark size={32} />
+              <div style={{ fontFamily: NC.serif, fontSize: 20, fontWeight: 500, letterSpacing: "-0.02em", color: NC.ink }}>neurochat</div>
             </div>
-          </div>
-        )}
-        {preparePlan && !preparePlan.reflection && !isPrepareReflectionDue(preparePlan) && (
-          <div
-            style={{
-              background: colors.primaryLight,
-              border: `1px solid ${colors.border}`,
-              borderRadius: 14,
-              padding: "14px 16px",
-              marginTop: 16,
-              textAlign: "left",
-            }}
-          >
-            <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 13, fontWeight: 800, color: colors.primaryDark, marginBottom: 6 }}>
-              📅 Coming up: {preparePlan.eventTitle}
-            </div>
-            <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 14, color: colors.text, lineHeight: 1.55 }}>{preparePlan.headline}</div>
-            {preparePlan.tip ? (
-              <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 13, color: colors.textMuted, marginTop: 8 }}>{preparePlan.tip}</div>
-            ) : null}
             <button
               type="button"
-              onClick={() => setScreen("scenarios")}
-              style={{ ...baseBtn, marginTop: 10, background: colors.primary, color: "#fff", padding: "10px 14px", fontSize: 13 }}
+              onClick={() => setScreen("settings")}
+              style={{
+                width: 38,
+                height: 38,
+                borderRadius: 12,
+                border: `1px solid ${NC.cardEdge}`,
+                background: NC.card,
+                color: NC.inkSoft,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+              }}
+              aria-label="Settings"
             >
-              Go to suggested scenarios
+              {NCIcon.gear(18)}
             </button>
           </div>
-        )}
-        {preparePlan && isPrepareReflectionDue(preparePlan) && (
-          <div
-            style={{
-              background: colors.accentLight,
-              border: `2px solid ${colors.accent}`,
-              borderRadius: 14,
-              padding: "14px 16px",
-              marginTop: 16,
-              textAlign: "left",
-            }}
-          >
-            <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 14, fontWeight: 700, color: colors.text, marginBottom: 8 }}>
-              How did “{preparePlan.eventTitle}” go?
-            </div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              {[
-                { id: "well", label: "It went okay or well" },
-                { id: "mixed", label: "Mixed" },
-                { id: "hard", label: "It was hard" },
-              ].map((opt) => (
+
+          {moodPhrase ? (
+            <div style={{ paddingTop: 12 }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  padding: "10px 14px",
+                  background: NC.sageSoft,
+                  borderRadius: 999,
+                  border: `1px solid ${NC.sage}30`,
+                }}
+              >
+                <div style={{ width: 8, height: 8, borderRadius: 999, background: NC.sage }} />
+                <Body size={13} color={NC.ink} style={{ flex: 1, fontWeight: 500 }}>
+                  Today you&apos;re{" "}
+                  <span style={{ fontFamily: NC.serif, fontStyle: "italic" }}>{moodPhrase}</span>
+                </Body>
                 <button
-                  key={opt.id}
                   type="button"
-                  onClick={() => submitPrepareReflection(opt.id)}
+                  onClick={() => setScreen("mood-checkin")}
                   style={{
-                    ...baseBtn,
-                    background: colors.card,
-                    border: `1px solid ${colors.border}`,
-                    padding: "8px 12px",
-                    fontSize: 13,
-                    color: colors.text,
+                    fontFamily: NC.mono,
+                    fontSize: 11,
+                    color: NC.inkMute,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.08em",
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
                   }}
                 >
-                  {opt.label}
+                  change
                 </button>
-              ))}
+              </div>
             </div>
-            <button type="button" onClick={() => clearPreparePlan()} style={{ ...baseBtn, marginTop: 10, background: "transparent", color: colors.textMuted, fontSize: 12 }}>
-              Dismiss without saving
-            </button>
-          </div>
-        )}
-        <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 32 }}>
-          <button
-            onClick={() => setScreen("scenarios")}
-            style={{ ...baseBtn, background: colors.primary, color: "#fff", padding: "18px 24px", fontSize: 17, display: "flex", alignItems: "center", gap: 12 }}
-          >
-            <span style={{ fontSize: 22 }}>💬</span> Practise a Conversation
-          </button>
-          <button
-            onClick={() => setScreen("prepare-tomorrow")}
-            style={{ ...baseBtn, background: colors.card, color: colors.primaryDark, padding: "16px 24px", fontSize: 16, border: `2px solid ${colors.primary}`, display: "flex", alignItems: "center", gap: 12 }}
-          >
-            <span style={{ fontSize: 20 }}>📅</span> Prepare for Tomorrow
-          </button>
-          <button
-            onClick={() => setScreen("progress")}
-            style={{ ...baseBtn, background: colors.accentLight, color: colors.text, padding: "16px 24px", fontSize: 16, border: `2px solid ${colors.accent}`, display: "flex", alignItems: "center", gap: 12 }}
-          >
-            <span style={{ fontSize: 20 }}>📊</span> See My Progress
-          </button>
-          <button
-            onClick={() => { setSelectedTipCategoryKey(null); setScreen("tips"); }}
-            style={{ ...baseBtn, background: colors.greenLight, color: colors.text, padding: "16px 24px", fontSize: 16, border: `2px solid ${colors.greenBorder}`, display: "flex", alignItems: "center", gap: 12 }}
-          >
-            <span style={{ fontSize: 20 }}>💡</span> Tips Library
-          </button>
-          <button
-            onClick={() => setScreen("howto")}
-            style={{ ...baseBtn, background: colors.card, color: colors.textMuted, padding: "16px 24px", fontSize: 15, border: `1px solid ${colors.border}`, display: "flex", alignItems: "center", gap: 12 }}
-          >
-            <span style={{ fontSize: 20 }}>❓</span> How This Works
-          </button>
-          <button
-            onClick={() => setScreen("settings")}
-            style={{ ...baseBtn, background: colors.card, color: colors.textMuted, padding: "14px 24px", fontSize: 14, border: `1px solid ${colors.border}`, display: "flex", alignItems: "center", gap: 12 }}
-          >
-            <span style={{ fontSize: 18 }}>⚙️</span> Settings
-          </button>
-          {authUser ? (
-            <button
-              onClick={handleSignOut}
-              style={{ ...baseBtn, background: colors.card, color: colors.textMuted, padding: "14px 24px", fontSize: 14, border: `1px solid ${colors.border}` }}
-            >
-              Sign out
-            </button>
-          ) : (
-            <button
-              onClick={() => setScreen("auth-choice")}
-              style={{ ...baseBtn, background: colors.card, color: colors.textMuted, padding: "14px 24px", fontSize: 14, border: `1px solid ${colors.border}` }}
-            >
-              Create free account
-            </button>
-          )}
-        </div>
+          ) : null}
 
-        {/* Reassurance */}
-        <p style={{ fontFamily: "'Nunito', sans-serif", fontSize: 13, color: colors.textMuted, textAlign: "center", marginTop: 36, lineHeight: 1.6 }}>
-          Everything here is private. You can't get this wrong.<br />This is your space to practise and learn.
-        </p>
-      </div>
-    </div>
-  );
+          <div style={{ paddingTop: 28, paddingBottom: 18 }}>
+            <Eyebrow>
+              A safe space · {homeTime}
+            </Eyebrow>
+            <H1 style={{ marginTop: 8, fontSize: 38 }}>
+              Take your time,
+              <br />
+              <span style={{ fontStyle: "italic", color: NC.teal }}>practise</span> at your pace.
+            </H1>
+          </div>
+
+          <div style={{ position: "relative", marginBottom: 14 }}>
+            <div
+              style={{
+                position: "relative",
+                background: NC.ink,
+                color: NC.paper,
+                borderRadius: 24,
+                padding: "20px 22px 22px",
+                overflow: "hidden",
+              }}
+            >
+              <div style={{ position: "absolute", right: -20, top: -10, opacity: 0.16 }}>
+                <NCThread width={260} height={120} stroke={NC.butter} opacity={0.9} />
+              </div>
+              <Eyebrow color={NC.butter} style={{ opacity: 0.9 }}>
+                Begin
+              </Eyebrow>
+              <div
+                style={{
+                  fontFamily: NC.serif,
+                  fontWeight: 400,
+                  fontSize: 26,
+                  lineHeight: 1.15,
+                  letterSpacing: "-0.015em",
+                  marginTop: 6,
+                  marginBottom: 16,
+                }}
+              >
+                Practise a conversation
+              </div>
+              <button
+                type="button"
+                onClick={() => setScreen("scenarios")}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  background: NC.butter,
+                  color: NC.ink,
+                  padding: "12px 18px",
+                  borderRadius: 14,
+                  width: "fit-content",
+                  fontWeight: 600,
+                  fontSize: 15,
+                  border: "none",
+                  cursor: "pointer",
+                  fontFamily: NC.sans,
+                }}
+              >
+                {scenarioCount} scenarios ready {NCIcon.send(16)}
+              </button>
+            </div>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
+            <SecondaryTile
+              icon={NCIcon.calendar(20)}
+              title="Prepare for tomorrow"
+              desc="Plan a real event"
+              tone={NC.tealSoft}
+              ink="#3D6A72"
+              onClick={() => setScreen("prepare-tomorrow")}
+            />
+            <SecondaryTile
+              icon={NCIcon.chart(20)}
+              title="My progress"
+              desc="Streaks & badges"
+              tone={NC.butterSoft}
+              ink="#8A6A1F"
+              onClick={() => setScreen("progress")}
+            />
+            <SecondaryTile
+              icon={NCIcon.bulb(20)}
+              title="Tips library"
+              desc={`${tipCount} quick reads`}
+              tone={NC.sageSoft}
+              ink="#5A7155"
+              onClick={() => {
+                setSelectedTipCategoryKey(null);
+                setScreen("tips");
+              }}
+            />
+            <SecondaryTile
+              icon={NCIcon.question(20)}
+              title="How this works"
+              desc="Short walkthrough"
+              tone={NC.mauveSoft}
+              ink="#5F4F70"
+              onClick={() => setScreen("howto")}
+            />
+          </div>
+
+          {preparePlan && !preparePlan.reflection && !isPrepareReflectionDue(preparePlan) ? (
+            <Card style={{ padding: 16, marginBottom: 12, background: NC.tealSoft, border: `1px dashed ${NC.teal}80` }}>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                <div style={{ color: NC.teal, display: "flex", paddingTop: 2 }}>{NCIcon.calendar(20)}</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontFamily: NC.serif, fontSize: 15, fontWeight: 500, color: NC.ink, marginBottom: 4 }}>Coming up: {preparePlan.eventTitle}</div>
+                  <Body size={14} color={NC.inkSoft}>
+                    {preparePlan.headline}
+                  </Body>
+                  {preparePlan.tip ? (
+                    <Body size={12} color={NC.inkMute} style={{ marginTop: 6 }}>
+                      {preparePlan.tip}
+                    </Body>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => setScreen("scenarios")}
+                    style={{
+                      marginTop: 10,
+                      padding: "8px 14px",
+                      borderRadius: 12,
+                      border: "none",
+                      background: NC.ink,
+                      color: NC.paper,
+                      fontFamily: NC.sans,
+                      fontSize: 13,
+                      fontWeight: 500,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Go to suggested scenarios
+                  </button>
+                </div>
+              </div>
+            </Card>
+          ) : null}
+
+          {preparePlan && isPrepareReflectionDue(preparePlan) ? (
+            <Card style={{ padding: 16, marginBottom: 12, background: NC.butterSoft, border: `1px solid ${NC.butter}60` }}>
+              <Body size={14} color={NC.ink} style={{ fontWeight: 600, marginBottom: 8 }}>
+                How did &ldquo;{preparePlan.eventTitle}&rdquo; go?
+              </Body>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {[
+                  { id: "well", label: "It went okay or well" },
+                  { id: "mixed", label: "Mixed" },
+                  { id: "hard", label: "It was hard" },
+                ].map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => submitPrepareReflection(opt.id)}
+                    style={{
+                      padding: "8px 12px",
+                      borderRadius: 12,
+                      border: `1px solid ${NC.cardEdge}`,
+                      background: NC.card,
+                      fontFamily: NC.sans,
+                      fontSize: 13,
+                      color: NC.ink,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              <button type="button" onClick={() => clearPreparePlan()} style={{ marginTop: 10, background: "none", border: "none", color: NC.inkMute, fontSize: 12, cursor: "pointer" }}>
+                Dismiss without saving
+              </button>
+            </Card>
+          ) : null}
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8, alignItems: "center" }}>
+            <Body size={12} color={NC.inkMute} style={{ textAlign: "center", display: "flex", alignItems: "center", gap: 6, justifyContent: "center" }}>
+              {NCIcon.user(14)}
+              {authUser ? "Signed in" : "Guest mode"}
+            </Body>
+            {!authUser ? (
+              <GhostButton onClick={() => setScreen("auth-choice")} style={{ maxWidth: 280 }}>
+                Create free account
+              </GhostButton>
+            ) : (
+              <GhostButton onClick={handleSignOut} style={{ maxWidth: 280 }}>
+                Sign out
+              </GhostButton>
+            )}
+          </div>
+
+          <div style={{ marginTop: "auto", paddingTop: 16, textAlign: "center" }}>
+            <Body size={12} color={NC.inkFaint}>
+              Everything here is private · You can&apos;t get this wrong
+            </Body>
+          </div>
+        </ScreenColumn>
+      </Paper>
+    );
+  };
 
   const renderScenarios = () => (
-    <div style={{ minHeight: "100vh", background: colors.bg }}>
-      <div style={{ maxWidth: 420, margin: "0 auto", padding: "0 20px", paddingBottom: 40 }}>
-        <div style={{ display: "flex", alignItems: "center", paddingTop: 20, paddingBottom: 20 }}>
-          <button onClick={() => setScreen("home")} style={{ ...baseBtn, background: "transparent", color: colors.primary, padding: "8px 0", fontSize: 15 }}>← Back</button>
+    <Paper style={{ minHeight: "100vh" }}>
+      <ScreenColumn style={{ paddingBottom: 32 }}>
+        <TopBar
+          left={
+            <button
+              type="button"
+              onClick={() => setScreen("home")}
+              style={{ background: "none", border: "none", color: NC.ink, display: "flex", alignItems: "center", gap: 4, cursor: "pointer", padding: 0, fontFamily: NC.sans, fontSize: 15 }}
+            >
+              {NCIcon.back(18)}
+            </button>
+          }
+          center="Library"
+        />
+        <div style={{ paddingTop: 8, paddingBottom: 16 }}>
+          <H1>
+            Choose what to
+            <br />
+            practise today.
+          </H1>
+          <Body size={15} style={{ marginTop: 10 }}>
+            {practiceScenarioList.length} scenarios. There&apos;s no wrong choice.
+          </Body>
         </div>
-        <h2 style={{ fontFamily: "'Nunito', sans-serif", fontSize: 24, fontWeight: 800, color: colors.primaryDark, margin: "0 0 6px 0" }}>Choose a Scenario</h2>
-        <p style={{ fontFamily: "'Nunito', sans-serif", fontSize: 14, color: colors.textMuted, margin: "0 0 16px 0" }}>Pick a situation you'd like to practise. There's no wrong choice.</p>
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
+
+        <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 14, marginInline: -6, paddingInline: 6 }}>
+          <FilterPill active={scenarioCategoryFilter === null} onClick={() => setScenarioCategoryFilter(null)}>
+            All
+          </FilterPill>
+          {(["work", "social", "everyday", "difficult", "relationships", "selfadvocacy"] ).map((k) => (
+            <FilterPill key={k} catKey={k} active={scenarioCategoryFilter === k} onClick={() => setScenarioCategoryFilter(k)}>
+              {NC_CAT[k].name}
+            </FilterPill>
+          ))}
+        </div>
+
+        {preparePlan?.eventTitle ? (
           <button
             type="button"
             onClick={() => setScreen("prepare-tomorrow")}
             style={{
-              ...baseBtn,
-              background: colors.primaryLight,
-              color: colors.primaryDark,
+              width: "100%",
+              marginBottom: 12,
+              background: NC.tealSoft,
+              border: `1px dashed ${NC.teal}80`,
+              borderRadius: 16,
               padding: "12px 14px",
-              fontSize: 14,
-              border: `1px solid ${colors.border}`,
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+              cursor: "pointer",
+              font: "inherit",
               textAlign: "left",
             }}
           >
-            📅 Prepare for Tomorrow — get a focused plan for an upcoming event
-          </button>
-          {hasCustomScenariosUnlock ? (
-            <button
-              type="button"
-              onClick={() => setScreen("custom-build")}
-              style={{
-                ...baseBtn,
-                background: colors.accentLight,
-                color: colors.text,
-                padding: "12px 14px",
-                fontSize: 14,
-                border: `1px solid ${colors.accent}`,
-                textAlign: "left",
-              }}
-            >
-              ✨ Create Custom Scenario — describe a real situation and we&apos;ll tailor a practice chat
-            </button>
-          ) : (
-            <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 12, color: colors.textMuted, padding: "4px 2px" }}>
-              Complete one scenario in each core category to unlock Custom Scenarios.
+            <div style={{ color: NC.teal, display: "flex" }}>{NCIcon.spark(20)}</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontFamily: NC.serif, fontSize: 14, fontWeight: 500, color: NC.ink }}>Prepare for tomorrow</div>
+              <Body size={12} color={NC.inkMute}>
+                {preparePlan.eventTitle}
+              </Body>
             </div>
+            <div style={{ color: NC.teal }}>{NCIcon.send(16)}</div>
+          </button>
+        ) : null}
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
+          <GhostButton onClick={() => setScreen("prepare-tomorrow")} style={{ minHeight: 48, fontSize: 14 }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+              {NCIcon.calendar(18)} Prepare for Tomorrow — plan a real event
+            </span>
+          </GhostButton>
+          {hasCustomScenariosUnlock ? (
+            <PrimaryButton kind="butter" onClick={() => setScreen("custom-build")} style={{ minHeight: 48, fontSize: 14 }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                {NCIcon.spark(18)} Create Custom Scenario
+              </span>
+            </PrimaryButton>
+          ) : (
+            <Body size={12} color={NC.inkMute} style={{ padding: "4px 2px" }}>
+              Complete one scenario in each core category to unlock Custom Scenarios.
+            </Body>
           )}
         </div>
+
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {practiceScenarioList.map((s) => (
-            <button
+          {filteredPracticeList.map((s) => (
+            <ScenarioCard
               key={s.id}
+              category={s.category}
+              iconKey={s.icon}
+              title={s.title}
+              desc={s.description}
+              difficultyLabel={s.difficulty ? DIFFICULTY_LABEL[s.difficulty] : ""}
+              done={completedScenarios.includes(s.id)}
               onClick={() => startScenario(s)}
-              style={{
-                ...baseBtn,
-                background: colors.card,
-                border: completedScenarios.includes(s.id) ? `2px solid ${colors.green}` : `1px solid ${colors.border}`,
-                borderRadius: 16,
-                padding: "16px 18px",
-                textAlign: "left",
-                display: "flex",
-                alignItems: "center",
-                gap: 14,
-                boxShadow: colors.shadow,
-              }}
-            >
-              <span style={{ fontSize: 28, flexShrink: 0 }}>{s.icon}</span>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 16, fontWeight: 700, color: colors.text }}>{s.title}</div>
-                <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 12, color: colors.primaryDark, marginTop: 4 }}>
-                  {s.category}
-                  {s.difficulty && (
-                    <span style={{ marginLeft: 8, color: colors.textMuted, fontWeight: 600 }}>
-                      · {DIFFICULTY_LABEL[s.difficulty]}
-                    </span>
-                  )}
-                </div>
-                <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 13, color: colors.textMuted, marginTop: 2 }}>{s.description}</div>
-              </div>
-              {completedScenarios.includes(s.id) && <span style={{ marginLeft: "auto", fontSize: 18, flexShrink: 0 }}>✅</span>}
-            </button>
+            />
           ))}
         </div>
-      </div>
-    </div>
+      </ScreenColumn>
+    </Paper>
   );
 
   const renderChat = () => {
@@ -1549,313 +1809,368 @@ export default function NeuroChat() {
     const suggestions = suggestionSource;
     const currentSuggestion =
       suggestions.length > 0 ? suggestions[Math.min(turnCount, suggestions.length - 1)] : null;
+    const cat = selectedScenario ? catColor(selectedScenario.category) : NC_CAT.work;
 
     return (
-      <div style={{ minHeight: "100vh", background: colors.bg, display: "flex", flexDirection: "column" }}>
-        <div style={{ maxWidth: 420, margin: "0 auto", width: "100%", flex: 1, display: "flex", flexDirection: "column", padding: "0 20px" }}>
-          {/* Header */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingTop: 16, paddingBottom: 12, borderBottom: `1px solid ${colors.border}`, flexWrap: "wrap", gap: 8 }}>
-            <button onClick={() => setScreen("scenarios")} style={{ ...baseBtn, background: "transparent", color: colors.primary, padding: "8px 0", fontSize: 15 }}>← Back</button>
-            {!pacingMode && (
-              <span style={{ fontFamily: "'Nunito', sans-serif", fontSize: 13, color: colors.textMuted, fontWeight: 600 }}>
-                {turnCount}/{maxTurns} turns
-              </span>
-            )}
-          </div>
-          {replaySourceSession && (
-            <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 12, color: colors.primaryDark, background: colors.accentLight, borderRadius: 10, padding: "8px 10px", marginTop: 8 }}>
-              🔁 Replay mode: trying different choices from {replaySourceSession.title}
-            </div>
-          )}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8, marginBottom: 4 }}>
-            <span style={{ fontFamily: "'Nunito', sans-serif", fontSize: 12, color: colors.textMuted, fontWeight: 600 }}>Social cue hints (?)</span>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={showHintsInChat}
-              onClick={() => persistHintsPreference(!showHintsInChat)}
-              style={{
-                ...baseBtn,
-                padding: "6px 12px",
-                fontSize: 12,
-                borderRadius: 999,
-                background: showHintsInChat ? colors.green : colors.border,
-                color: showHintsInChat ? "#fff" : colors.textMuted,
-              }}
-            >
-              {showHintsInChat ? "On" : "Off"}
-            </button>
-          </div>
-          <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 13, color: colors.primary, background: colors.primaryLight, borderRadius: 10, padding: "8px 14px", margin: "12px 0", textAlign: "center", fontWeight: 600 }}>
-            {selectedScenario?.icon} {selectedScenario?.title}
-            {selectedScenario?.difficulty && (
-              <span style={{ display: "block", fontWeight: 500, fontSize: 12, color: colors.textMuted, marginTop: 4 }}>
-                {selectedScenario.category} · {DIFFICULTY_LABEL[selectedScenario.difficulty]}
-              </span>
-            )}
-          </div>
-
-          {/* Messages */}
-          <div style={{ flex: 1, overflowY: "auto", paddingBottom: 16, display: "flex", flexDirection: "column" }}>
-            {messages.map((msg, i) => (
-              <div
-                key={i}
+      <Paper style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+        <ScreenColumn style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, paddingBottom: 8 }}>
+          <TopBar
+            left={
+              <button
+                type="button"
+                onClick={() => setScreen("scenarios")}
                 style={{
-                  alignSelf: msg.sender === "user" ? "flex-end" : "flex-start",
-                  marginBottom: 12,
-                  maxWidth: "100%",
+                  background: "none",
+                  border: "none",
+                  color: NC.ink,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 4,
+                  cursor: "pointer",
+                  padding: 0,
+                  fontFamily: NC.sans,
+                  fontSize: 14,
                 }}
               >
+                {NCIcon.back(18)} Back
+              </button>
+            }
+            center={
+              <span style={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 13, fontWeight: 500, color: NC.inkSoft }}>
+                {selectedScenario?.title}
+              </span>
+            }
+            right={
+              !pacingMode ? (
+                <div style={{ display: "flex", gap: 4 }}>
+                  {Array.from({ length: maxTurns }, (_, i) => (
+                    <TurnDot key={i} done={i < turnCount} />
+                  ))}
+                </div>
+              ) : (
+                <span />
+              )
+            }
+          />
+
+          {replaySourceSession ? (
+            <div
+              style={{
+                fontSize: 12,
+                color: NC.inkSoft,
+                background: NC.butterSoft,
+                borderRadius: 10,
+                padding: "8px 10px",
+                marginTop: 4,
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              {NCIcon.replay(16)}
+              Replay mode: different choices from {replaySourceSession.title}
+            </div>
+          ) : null}
+
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginTop: 8, marginBottom: 4 }}>
+            <Eyebrow style={{ letterSpacing: "0.08em" }}>Social cue hints</Eyebrow>
+            <Toggle checked={showHintsInChat} onChange={(v) => persistHintsPreference(v)} />
+          </div>
+
+          <div style={{ padding: "0 0 8px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <Chip color={cat.ink} soft={cat.soft}>
+                {selectedScenario?.category || "Scenario"}
+              </Chip>
+              {selectedScenario?.difficulty ? (
+                <Body size={12} color={NC.inkMute}>
+                  {DIFFICULTY_LABEL[selectedScenario.difficulty]}
+                </Body>
+              ) : null}
+            </div>
+          </div>
+
+          <div style={{ flex: 1, overflowY: "auto", padding: "12px 0", display: "flex", flexDirection: "column", gap: 14, position: "relative", minHeight: 120 }}>
+            <ConversationThreadLine />
+            {messages.map((msg, i) => (
+              <div key={i} style={{ position: "relative", zIndex: 1 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <Bubble side={msg.sender === "user" ? "user" : "ai"}>{msg.text}</Bubble>
+                  {msg.sender === "ai" && showHintsInChat ? (
+                    <div style={{ display: "flex", justifyContent: "flex-start", paddingLeft: 4, marginTop: -4 }}>
+                      <button
+                        type="button"
+                        title="What might this mean socially?"
+                        onClick={() => fetchAiExplanation(msg.text, i)}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 4,
+                          padding: "4px 10px",
+                          background: NC.butterSoft,
+                          color: "#8A6A1F",
+                          border: `1px solid ${NC.butter}80`,
+                          borderRadius: 999,
+                          fontFamily: NC.mono,
+                          fontSize: 10,
+                          letterSpacing: "0.08em",
+                          textTransform: "uppercase",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {NCIcon.question(12)} what just happened?
+                      </button>
+                    </div>
+                  ) : null}
+                  {msg.sender === "ai" && explainIdx === i ? (
+                    <div
+                      style={{
+                        marginTop: 4,
+                        padding: "10px 12px",
+                        background: NC.tealSoft,
+                        border: `1px solid ${NC.cardEdge}`,
+                        borderRadius: 12,
+                        fontSize: 13,
+                        color: NC.ink,
+                        lineHeight: 1.55,
+                        maxWidth: "95%",
+                      }}
+                    >
+                      {explainLoading ? "Thinking…" : explainText}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            ))}
+            {typing ? (
+              <div style={{ display: "flex", justifyContent: "flex-start", alignSelf: "flex-start", marginBottom: 4 }}>
                 <div
                   style={{
                     display: "flex",
-                    flexDirection: msg.sender === "user" ? "row-reverse" : "row",
-                    alignItems: "flex-start",
-                    gap: 8,
+                    alignItems: "center",
+                    gap: 6,
+                    padding: "8px 14px",
+                    background: NC.card,
+                    border: `1px solid ${NC.cardEdge}`,
+                    borderRadius: 18,
                   }}
                 >
-                  <div
-                    style={{
-                      maxWidth: "82%",
-                      background: msg.sender === "user" ? colors.chatBubbleUser : colors.chatBubbleAI,
-                      border: msg.sender === "user" ? `1.5px solid ${colors.accent}` : `1.5px solid ${colors.border}`,
-                      borderRadius: msg.sender === "user" ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
-                      padding: "12px 16px",
-                      fontFamily: "'Nunito', sans-serif",
-                      fontSize: 15,
-                      lineHeight: 1.5,
-                      color: colors.text,
-                    }}
-                  >
-                    {msg.text}
-                  </div>
-                  {msg.sender === "ai" && showHintsInChat && (
-                    <button
-                      type="button"
-                      title="What might this mean socially?"
-                      onClick={() => fetchAiExplanation(msg.text, i)}
-                      style={{
-                        ...baseBtn,
-                        flexShrink: 0,
-                        width: 28,
-                        height: 28,
-                        borderRadius: "50%",
-                        background: colors.accentLight,
-                        color: colors.primaryDark,
-                        fontWeight: 800,
-                        fontSize: 14,
-                        border: `1px solid ${colors.accent}`,
-                        lineHeight: 1,
-                      }}
-                    >
-                      ?
-                    </button>
-                  )}
-                </div>
-                {msg.sender === "ai" && explainIdx === i && (
-                  <div
-                    style={{
-                      marginTop: 8,
-                      padding: "10px 12px",
-                      background: colors.accentLight,
-                      border: `1px solid ${colors.amberBorder}`,
-                      borderRadius: 12,
-                      fontFamily: "'Nunito', sans-serif",
-                      fontSize: 13,
-                      color: colors.text,
-                      lineHeight: 1.55,
-                      maxWidth: "95%",
-                    }}
-                  >
-                    {explainLoading ? "Thinking…" : explainText}
-                  </div>
-                )}
-              </div>
-            ))}
-            {typing && (
-              <div style={{ display: "flex", justifyContent: "flex-start", marginBottom: 12 }}>
-                <div style={{ background: colors.chatBubbleAI, border: `1.5px solid ${colors.border}`, borderRadius: "18px 18px 18px 4px", padding: "12px 20px", fontFamily: "'Nunito', sans-serif", fontSize: 15, color: colors.textMuted }}>
-                  typing...
+                  {[0, 1, 2].map((j) => (
+                    <span key={j} className="nc-typing-dot" style={{ width: 6, height: 6, borderRadius: 999, background: NC.inkMute }} />
+                  ))}
                 </div>
               </div>
-            )}
+            ) : null}
             <div ref={chatEndRef} />
           </div>
-          {chatError && (
-            <div
-              style={{
-                fontFamily: "'Nunito', sans-serif",
-                fontSize: 13,
-                color: "#9C4221",
-                background: colors.amberLight,
-                border: `1px solid ${colors.amberBorder}`,
-                borderRadius: 10,
-                padding: "8px 12px",
-                marginBottom: 10,
-              }}
-            >
-              {chatError}
-            </div>
-          )}
 
-          {/* Suggestion */}
-          {showSuggestion && currentSuggestion && (
-            <div style={{ background: colors.card, border: `1px solid ${colors.border}`, borderRadius: 14, padding: "12px 16px", marginBottom: 10, boxShadow: colors.shadow }}>
-              <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 12, fontWeight: 700, color: colors.primary, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>Suggested reply</div>
-              <div
-                onClick={() => { setUserInput(currentSuggestion); setShowSuggestion(false); }}
-                style={{ fontFamily: "'Nunito', sans-serif", fontSize: 14, color: colors.text, cursor: "pointer", lineHeight: 1.5, padding: "6px 10px", background: colors.primaryLight, borderRadius: 10 }}
+          {chatError ? (
+            <div style={{ fontSize: 13, color: NC.terracotta, background: NC.terracottaSoft, borderRadius: 12, padding: "8px 12px", marginBottom: 10 }}>{chatError}</div>
+          ) : null}
+
+          {showSuggestion && currentSuggestion ? (
+            <Card style={{ padding: 14, marginBottom: 10 }}>
+              <Eyebrow style={{ marginBottom: 6, color: NC.teal }}>Suggested reply</Eyebrow>
+              <button
+                type="button"
+                onClick={() => {
+                  setUserInput(currentSuggestion);
+                  setShowSuggestion(false);
+                }}
+                style={{
+                  width: "100%",
+                  textAlign: "left",
+                  fontFamily: NC.sans,
+                  fontSize: 14,
+                  color: NC.ink,
+                  cursor: "pointer",
+                  lineHeight: 1.5,
+                  padding: "8px 10px",
+                  background: NC.tealSoft,
+                  borderRadius: 10,
+                  border: `1px solid ${NC.cardEdge}`,
+                }}
               >
                 {currentSuggestion}
-              </div>
-              <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 11, color: colors.textMuted, marginTop: 6 }}>Tap to use this, or write your own</div>
-            </div>
-          )}
-
-          {/* Input area */}
-          <div style={{ paddingBottom: 20, paddingTop: 8, borderTop: `1px solid ${colors.border}` }}>
-            {!showSuggestion && !pacingMode && (
-              <button
-                onClick={() => setShowSuggestion(true)}
-                style={{ ...baseBtn, background: "transparent", color: colors.primary, fontSize: 13, padding: "6px 0", marginBottom: 8, fontWeight: 600 }}
-              >
-                💡 Feeling stuck? Tap for a suggestion
               </button>
-            )}
-            {pacingMode && currentSuggestion && (
-              <div style={{ marginBottom: 8 }}>
-                <button
-                  onClick={() => setUserInput(currentSuggestion)}
-                  style={{ ...baseBtn, background: colors.primaryLight, color: colors.primaryDark, fontSize: 13, padding: "8px 12px", border: `1px solid ${colors.border}` }}
-                >
-                  💡 Use a suggested reply
-                </button>
-              </div>
-            )}
-            <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
+              <Body size={11} color={NC.inkMute} style={{ marginTop: 6 }}>
+                Tap to use this, or write your own
+              </Body>
+            </Card>
+          ) : null}
+
+          <div style={{ paddingTop: 8, borderTop: `1px solid ${NC.cardEdge}` }}>
+            {!showSuggestion && !pacingMode ? (
+              <button
+                type="button"
+                onClick={() => setShowSuggestion(true)}
+                style={{
+                  width: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 8,
+                  padding: "10px 14px",
+                  marginBottom: 8,
+                  background: "transparent",
+                  border: `1.5px dashed ${NC.butter}`,
+                  color: "#8A6A1F",
+                  borderRadius: 14,
+                  fontFamily: NC.sans,
+                  fontSize: 13,
+                  fontWeight: 500,
+                  cursor: "pointer",
+                }}
+              >
+                {NCIcon.bulb(16)} Feeling stuck? Tap for a gentle suggestion
+              </button>
+            ) : null}
+            {pacingMode && currentSuggestion ? (
+              <button
+                type="button"
+                onClick={() => setUserInput(currentSuggestion)}
+                style={{
+                  width: "100%",
+                  marginBottom: 8,
+                  padding: "8px 12px",
+                  borderRadius: 12,
+                  border: `1px solid ${NC.cardEdge}`,
+                  background: NC.tealSoft,
+                  color: NC.ink,
+                  fontFamily: NC.sans,
+                  fontSize: 13,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 8,
+                }}
+              >
+                {NCIcon.bulb(16)} Use a suggested reply
+              </button>
+            ) : null}
+            <div style={{ display: "flex", gap: 10, alignItems: "center", paddingBottom: 12 }}>
               <textarea
                 value={userInput}
                 onChange={(e) => setUserInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Type your reply..."
+                placeholder="Type your reply…"
                 rows={2}
                 disabled={feedbackLoading}
                 style={{
                   flex: 1,
-                  fontFamily: "'Nunito', sans-serif",
+                  fontFamily: NC.sans,
                   fontSize: 15,
-                  padding: "12px 16px",
-                  borderRadius: 16,
-                  border: `2px solid ${colors.border}`,
+                  padding: "12px 18px",
+                  borderRadius: 22,
+                  border: `1px solid ${NC.cardEdge}`,
                   outline: "none",
                   resize: "none",
                   lineHeight: 1.4,
-                  background: colors.card,
-                  color: colors.text,
+                  background: NC.card,
+                  color: NC.ink,
                 }}
               />
               <button
+                type="button"
                 onClick={sendMessage}
                 disabled={!userInput.trim() || feedbackLoading}
                 style={{
-                  ...baseBtn,
-                  background: userInput.trim() && !feedbackLoading ? colors.primary : colors.border,
-                  color: "#fff",
-                  width: 48,
-                  height: 48,
-                  borderRadius: "50%",
-                  fontSize: 20,
+                  width: 46,
+                  height: 46,
+                  borderRadius: 999,
+                  background: userInput.trim() && !feedbackLoading ? NC.ink : NC.cardEdge,
+                  color: NC.paper,
+                  border: "none",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
+                  cursor: userInput.trim() && !feedbackLoading ? "pointer" : "not-allowed",
                   flexShrink: 0,
                 }}
+                aria-label="Send"
               >
-                ▶
+                {NCIcon.send(18)}
               </button>
             </div>
-            {feedbackLoading && (
-              <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 13, color: colors.textMuted, marginTop: 8 }}>
+            {feedbackLoading ? (
+              <Body size={13} color={NC.inkMute}>
                 Generating your feedback...
-              </div>
-            )}
-            {sessionSaving && (
-              <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 13, color: colors.textMuted, marginTop: 4 }}>
+              </Body>
+            ) : null}
+            {sessionSaving ? (
+              <Body size={13} color={NC.inkMute} style={{ marginTop: 4 }}>
                 Saving your session...
-              </div>
-            )}
+              </Body>
+            ) : null}
           </div>
-        </div>
-      </div>
+        </ScreenColumn>
+      </Paper>
     );
   };
 
   const renderFeedback = () => {
     if (!feedback) return null;
     return (
-      <div style={{ minHeight: "100vh", background: colors.bg }}>
-        <div style={{ maxWidth: 420, margin: "0 auto", padding: "0 20px", paddingBottom: 40 }}>
-          <div style={{ display: "flex", alignItems: "center", paddingTop: 20, paddingBottom: 20 }}>
-            <button onClick={() => setScreen("home")} style={{ ...baseBtn, background: "transparent", color: colors.primary, padding: "8px 0", fontSize: 15 }}>← Home</button>
-          </div>
-          <h2 style={{ fontFamily: "'Nunito', sans-serif", fontSize: 24, fontWeight: 800, color: colors.primaryDark, margin: "0 0 4px 0" }}>Your Conversation Feedback</h2>
-          <p style={{ fontFamily: "'Nunito', sans-serif", fontSize: 14, color: colors.textMuted, margin: "0 0 24px 0" }}>
-            Well done for practising — that's the hardest part!
-          </p>
-
-          {/* Strengths */}
-          <div style={{ background: colors.greenLight, border: `1.5px solid ${colors.greenBorder}`, borderRadius: 18, padding: "18px 20px", marginBottom: 14 }}>
-            <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 16, fontWeight: 800, color: "#276749", marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
-              <span>✅</span> Strengths
-            </div>
-            {feedback.strengths.map((s, i) => (
-              <div key={i} style={{ fontFamily: "'Nunito', sans-serif", fontSize: 14, color: "#276749", lineHeight: 1.6, marginBottom: 6, paddingLeft: 8 }}>
-                • {s}
-              </div>
-            ))}
+      <Paper style={{ minHeight: "100vh", overflow: "hidden" }}>
+        <ScreenColumn style={{ paddingBottom: 24 }}>
+          <TopBar
+            left={
+              <button type="button" onClick={() => setScreen("home")} style={{ background: "none", border: "none", color: NC.ink, cursor: "pointer", padding: 0 }}>
+                {NCIcon.back(18)}
+              </button>
+            }
+            center="Reflection"
+          />
+          <div style={{ paddingTop: 8, paddingBottom: 18 }}>
+            <Eyebrow color={NC.sage}>Well done</Eyebrow>
+            <H1 style={{ marginTop: 6, fontSize: 28 }}>
+              You stayed open
+              <br />
+              and curious.
+            </H1>
           </div>
 
-          {/* Things to Explore */}
-          {feedback.explore.length > 0 && (
-            <div style={{ background: colors.amberLight, border: `1.5px solid ${colors.amberBorder}`, borderRadius: 18, padding: "18px 20px", marginBottom: 14 }}>
-              <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 16, fontWeight: 800, color: "#9C4221", marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
-                <span>🔍</span> Things to Explore
-              </div>
-              {feedback.explore.map((s, i) => (
-                <div key={i} style={{ fontFamily: "'Nunito', sans-serif", fontSize: 14, color: "#9C4221", lineHeight: 1.6, marginBottom: 6, paddingLeft: 8 }}>
-                  • {s}
-                </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12, flex: 1, overflow: "auto", paddingBottom: 8 }}>
+            <FeedbackCard tone={NC.sageSoft} ink="#5A7155" border={NC.sage} title="Strengths" eyebrow="What went well">
+              {feedback.strengths.map((s, i) => (
+                <FBPoint key={i}>{s}</FBPoint>
               ))}
-            </div>
-          )}
+            </FeedbackCard>
 
-          {/* Example Responses */}
-          {feedback.examples.length > 0 && (
-            <div style={{ background: colors.primaryLight, border: `1.5px solid #BEE3F8`, borderRadius: 18, padding: "18px 20px", marginBottom: 24 }}>
-              <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 16, fontWeight: 800, color: colors.primaryDark, marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
-                <span>💡</span> Example Responses That Work Well
-              </div>
-              {feedback.examples.map((s, i) => (
-                <div key={i} style={{ fontFamily: "'Nunito', sans-serif", fontSize: 14, color: colors.primaryDark, lineHeight: 1.6, marginBottom: 8, paddingLeft: 8, fontStyle: "italic" }}>
-                  "{s}"
-                </div>
-              ))}
-            </div>
-          )}
+            {feedback.explore.length > 0 ? (
+              <FeedbackCard tone={NC.butterSoft} ink="#8A6A1F" border={NC.butter} title="Things to explore" eyebrow="One small step">
+                {feedback.explore.map((s, i) => (
+                  <FBPoint key={i}>{s}</FBPoint>
+                ))}
+              </FeedbackCard>
+            ) : null}
 
-          {/* Action buttons */}
-          {!authUser && completedScenarios.length === 1 && (
-            <div style={{ background: colors.primaryLight, border: `1px solid ${colors.border}`, borderRadius: 14, padding: "12px 14px", marginBottom: 12 }}>
-              <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 13, color: colors.primaryDark, lineHeight: 1.5 }}>
-                Want to save your progress? Create a free account.
-                <button onClick={() => setScreen("auth-choice")} style={{ ...baseBtn, background: "transparent", color: colors.primary, fontSize: 13, textDecoration: "underline", padding: 0, marginLeft: 6 }}>
+            {feedback.examples.length > 0 ? (
+              <FeedbackCard tone={NC.tealSoft} ink="#3D6A72" border={NC.teal} title="Other ways to say it" eyebrow="Phrasing" compact>
+                {feedback.examples.map((s, i) => (
+                  <div key={i} style={{ fontFamily: NC.serif, fontStyle: "italic", fontSize: 14, color: NC.ink, lineHeight: 1.4 }}>
+                    &ldquo;{s}&rdquo;
+                  </div>
+                ))}
+              </FeedbackCard>
+            ) : null}
+          </div>
+
+          {!authUser && completedScenarios.length === 1 ? (
+            <Card style={{ padding: 14, marginBottom: 12, background: NC.tealSoft }}>
+              <Body size={13} color={NC.ink} style={{ lineHeight: 1.5 }}>
+                Want to save your progress?{" "}
+                <button type="button" onClick={() => setScreen("auth-choice")} style={{ background: "none", border: "none", color: NC.teal, fontWeight: 600, cursor: "pointer", padding: 0, textDecoration: "underline" }}>
                   Sign up
                 </button>
-              </div>
-            </div>
-          )}
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <button
+              </Body>
+            </Card>
+          ) : null}
+
+          <div style={{ display: "flex", gap: 8, paddingTop: 8 }}>
+            <GhostButton
+              style={{ flex: 1, fontSize: 14, minHeight: 52 }}
               onClick={() =>
                 startReplayFromSession({
                   id: `latest-${Date.now()}`,
@@ -1865,327 +2180,301 @@ export default function NeuroChat() {
                   created_at: new Date().toISOString(),
                 })
               }
-              style={{ ...baseBtn, background: colors.accentLight, color: colors.text, padding: "16px 24px", fontSize: 15, border: `1px solid ${colors.accent}` }}
             >
-              🔁 Replay with Different Choices
-            </button>
-            <button onClick={() => startScenario(selectedScenario)} style={{ ...baseBtn, background: colors.primary, color: "#fff", padding: "16px 24px", fontSize: 16 }}>
-              🔄 Try This Scenario Again
-            </button>
-            <button onClick={() => setScreen("scenarios")} style={{ ...baseBtn, background: colors.card, color: colors.primary, padding: "14px 24px", fontSize: 15, border: `2px solid ${colors.primary}` }}>
-              Try a Different Scenario
-            </button>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                {NCIcon.replay(16)} Replay
+              </span>
+            </GhostButton>
+            <PrimaryButton kind="ink" style={{ flex: 1.4, fontSize: 14, minHeight: 52 }} onClick={() => setScreen("scenarios")}>
+              Try something different
+            </PrimaryButton>
           </div>
-        </div>
-      </div>
+          <PrimaryButton kind="sage" style={{ marginTop: 10, fontSize: 14 }} onClick={() => startScenario(selectedScenario)}>
+            Try this scenario again
+          </PrimaryButton>
+        </ScreenColumn>
+      </Paper>
     );
   };
 
-  const renderProgress = () => (
-    <div style={{ minHeight: "100vh", background: colors.bg }}>
-      <div style={{ maxWidth: 420, margin: "0 auto", padding: "0 20px", paddingBottom: 40 }}>
-        <div style={{ display: "flex", alignItems: "center", paddingTop: 20, paddingBottom: 20 }}>
-          <button onClick={() => setScreen("home")} style={{ ...baseBtn, background: "transparent", color: colors.primary, padding: "8px 0", fontSize: 15 }}>← Back</button>
-        </div>
-        <h2 style={{ fontFamily: "'Nunito', sans-serif", fontSize: 24, fontWeight: 800, color: colors.primaryDark, margin: "0 0 4px 0" }}>Your Progress</h2>
-        <p style={{ fontFamily: "'Nunito', sans-serif", fontSize: 14, color: colors.textMuted, margin: "0 0 16px 0" }}>Every conversation you practise is a step forward.</p>
+  const renderProgress = () => {
+    const daysLabel = Math.max(1, moodHistory?.length || 1);
+    const badgeAccent = (iconKey) => {
+      if (iconKey === "leaf" || iconKey === "heart") return NC.sage;
+      if (iconKey === "shield") return NC.teal;
+      if (iconKey === "trophy" || iconKey === "chart") return NC.butter;
+      return NC.teal;
+    };
 
-        <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
-          <button
-            type="button"
-            onClick={() => setProgressTab("overview")}
-            style={{
-              ...baseBtn,
-              flex: 1,
-              padding: "10px 12px",
-              fontSize: 14,
-              background: progressTab === "overview" ? colors.primary : colors.card,
-              color: progressTab === "overview" ? "#fff" : colors.text,
-              border: `1px solid ${progressTab === "overview" ? colors.primary : colors.border}`,
-            }}
-          >
-            Overview
-          </button>
-          {hasConversationReview ? (
+    return (
+      <Paper style={{ minHeight: "100vh" }}>
+        <ScreenColumn style={{ paddingBottom: 32 }}>
+          <TopBar
+            left={
+              <button type="button" onClick={() => setScreen("home")} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: NC.ink }}>
+                {NCIcon.back(18)}
+              </button>
+            }
+            center="Your garden"
+            right={
+              <button
+                type="button"
+                onClick={() => {
+                  generateShareCard();
+                  setScreen("share-card");
+                }}
+                style={{ background: "none", border: "none", padding: 4, cursor: "pointer", color: NC.inkSoft }}
+                aria-label="Share progress"
+              >
+                {NCIcon.share(18)}
+              </button>
+            }
+          />
+
+          <div style={{ paddingTop: 8, paddingBottom: 14 }}>
+            <Eyebrow>Since you began · {daysLabel} days ago</Eyebrow>
+            <H1 style={{ marginTop: 6, fontSize: 28 }}>
+              Every conversation
+              <br />
+              is a step <span style={{ fontStyle: "italic", color: NC.sage }}>forward.</span>
+            </H1>
+          </div>
+
+          <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
             <button
               type="button"
-              onClick={() => setProgressTab("history")}
+              onClick={() => setProgressTab("overview")}
               style={{
-                ...baseBtn,
                 flex: 1,
                 padding: "10px 12px",
                 fontSize: 14,
-                background: progressTab === "history" ? colors.primary : colors.card,
-                color: progressTab === "history" ? "#fff" : colors.text,
-                border: `1px solid ${progressTab === "history" ? colors.primary : colors.border}`,
+                borderRadius: 12,
+                fontFamily: NC.sans,
+                fontWeight: 500,
+                cursor: "pointer",
+                border: `1px solid ${progressTab === "overview" ? NC.ink : NC.cardEdge}`,
+                background: progressTab === "overview" ? NC.ink : NC.card,
+                color: progressTab === "overview" ? NC.paper : NC.ink,
               }}
             >
-              History
+              Overview
             </button>
-          ) : (
-            <div
-              style={{
-                flex: 1,
-                fontFamily: "'Nunito', sans-serif",
-                fontSize: 12,
-                color: colors.textMuted,
-                alignSelf: "center",
-                paddingLeft: 6,
-              }}
-              title="Complete 10 sessions to unlock conversation history."
-            >
-              History locks after 10 sessions
-            </div>
-          )}
-        </div>
-
-        {progressTab === "overview" ? (
-          <>
-            <button
-              type="button"
-              onClick={() => {
-                generateShareCard();
-                setScreen("share-card");
-              }}
-              style={{ ...baseBtn, width: "100%", marginBottom: 14, background: colors.primaryLight, color: colors.primaryDark, padding: "12px 14px", fontSize: 14, border: `1px solid ${colors.border}` }}
-            >
-              🖼️ Share your progress card
-            </button>
-            <div style={{ display: "flex", gap: 10, marginBottom: 24, flexWrap: "wrap" }}>
-              <div style={{ flex: "1 1 110px", background: colors.primaryLight, borderRadius: 16, padding: "16px 12px", textAlign: "center" }}>
-                <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 28, fontWeight: 800, color: colors.primary }}>{completedScenarios.length}</div>
-                <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 12, color: colors.primaryDark, marginTop: 2 }}>Different scenarios</div>
-              </div>
-              <div style={{ flex: "1 1 110px", background: colors.greenLight, borderRadius: 16, padding: "16px 12px", textAlign: "center", border: `1px solid ${colors.greenBorder}` }}>
-                <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 28, fontWeight: 800, color: colors.green }}>{totalSessions}</div>
-                <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 12, color: "#276749", marginTop: 2 }}>Sessions</div>
-              </div>
-              <div style={{ flex: "1 1 110px", background: colors.accentLight, borderRadius: 16, padding: "16px 12px", textAlign: "center" }}>
-                <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 28, fontWeight: 800, color: colors.amber }}>{earnedBadges.length}</div>
-                <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 12, color: "#975A16", marginTop: 2 }}>Badges</div>
-              </div>
-            </div>
-
-            <h3 style={{ fontFamily: "'Nunito', sans-serif", fontSize: 18, fontWeight: 800, color: colors.primaryDark, marginBottom: 14 }}>Badges</h3>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 28 }}>
-              {BADGES.map((b) => {
-                const earned = migrateEarnedBadges(earnedBadges).includes(b.id);
-                return (
-                  <div
-                    key={b.id}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 14,
-                      background: earned ? colors.card : colors.bg,
-                      border: earned ? `2px solid ${colors.green}` : `1px dashed ${colors.border}`,
-                      borderRadius: 14,
-                      padding: "14px 16px",
-                      opacity: earned ? 1 : 0.5,
-                    }}
-                  >
-                    <span style={{ fontSize: 26 }}>{earned ? b.icon : "🔒"}</span>
-                    <div>
-                      <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 15, fontWeight: 700, color: earned ? colors.text : colors.textMuted }}>{b.name}</div>
-                      <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 12, color: colors.textMuted }}>{b.desc}</div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <h3 style={{ fontFamily: "'Nunito', sans-serif", fontSize: 18, fontWeight: 800, color: colors.primaryDark, marginBottom: 14 }}>Completed Scenarios</h3>
-            {completedScenarios.length === 0 ? (
-              <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 14, color: colors.textMuted, background: colors.card, borderRadius: 14, padding: "20px", textAlign: "center", border: `1px solid ${colors.border}` }}>
-                No scenarios completed yet. Start practising to see your progress here!
-              </div>
+            {hasConversationReview ? (
+              <button
+                type="button"
+                onClick={() => setProgressTab("history")}
+                style={{
+                  flex: 1,
+                  padding: "10px 12px",
+                  fontSize: 14,
+                  borderRadius: 12,
+                  fontFamily: NC.sans,
+                  fontWeight: 500,
+                  cursor: "pointer",
+                  border: `1px solid ${progressTab === "history" ? NC.ink : NC.cardEdge}`,
+                  background: progressTab === "history" ? NC.ink : NC.card,
+                  color: progressTab === "history" ? NC.paper : NC.ink,
+                }}
+              >
+                History
+              </button>
             ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {completedScenarios.map((sid) => {
-                  const s = SCENARIOS.find((sc) => sc.id === sid);
-                  return s ? (
-                    <div key={sid} style={{ display: "flex", alignItems: "center", gap: 12, background: colors.card, borderRadius: 12, padding: "12px 16px", border: `1px solid ${colors.greenBorder}` }}>
-                      <span style={{ fontSize: 20 }}>{s.icon}</span>
-                      <span style={{ fontFamily: "'Nunito', sans-serif", fontSize: 14, fontWeight: 600, color: colors.text }}>{s.title}</span>
-                      <span style={{ marginLeft: "auto", fontSize: 14 }}>✅</span>
-                    </div>
-                  ) : null;
-                })}
-              </div>
-            )}
-          </>
-        ) : (
-          <div>
-            <p style={{ fontFamily: "'Nunito', sans-serif", fontSize: 14, color: colors.textMuted, marginBottom: 14 }}>
-              Open a past session to re-read the transcript and coaching feedback.
-            </p>
-            {combinedHistoryRows.length === 0 ? (
-              <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 14, color: colors.textMuted, background: colors.card, borderRadius: 14, padding: "20px", textAlign: "center", border: `1px solid ${colors.border}` }}>
-                No saved sessions yet. Finish a conversation to see it here.
-              </div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {combinedHistoryRows.map((row) => (
-                  <div
-                    key={row.id}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 12,
-                      background: colors.card,
-                      borderRadius: 14,
-                      padding: "14px 16px",
-                      border: `1px solid ${colors.border}`,
-                      boxShadow: colors.shadow,
-                    }}
-                  >
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 15, fontWeight: 700, color: colors.text }}>{sessionRowTitle(row)}</div>
-                      <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 12, color: colors.textMuted, marginTop: 4 }}>{formatSessionWhen(row.created_at)}</div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setHistoryReview(row);
-                        setScreen("history-review");
-                      }}
-                      style={{ ...baseBtn, background: colors.primaryLight, color: colors.primaryDark, padding: "8px 12px", fontSize: 13 }}
-                    >
-                      Review
-                    </button>
-                  </div>
-                ))}
+              <div style={{ flex: 1, fontSize: 11, color: NC.inkMute, alignSelf: "center", paddingLeft: 6 }} title="Complete 10 sessions to unlock conversation history.">
+                History locks after 10 sessions
               </div>
             )}
           </div>
-        )}
-      </div>
-    </div>
-  );
+
+          {progressTab === "overview" ? (
+            <>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 16 }}>
+                <StatCard n={String(totalSessions)} label="Sessions" color={NC.teal} />
+                <StatCard n={String(completedScenarios.length)} label="Scenarios" color={NC.sage} />
+                <StatCard n={String(earnedBadges.length)} label="Badges" color={NC.butter} />
+              </div>
+
+              <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 10 }}>
+                <H2 style={{ fontSize: 18 }}>Your badges</H2>
+                <Body size={12} color={NC.inkMute}>
+                  {migrateEarnedBadges(earnedBadges).length} of {BADGES.length}
+                </Body>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8, marginBottom: 18 }}>
+                {BADGES.map((b) => {
+                  const earned = migrateEarnedBadges(earnedBadges).includes(b.id);
+                  const col = badgeAccent(b.icon);
+                  return (
+                    <BadgeTile key={b.id} icon={NCIcon[b.icon] ? NCIcon[b.icon](22) : NCIcon.leaf(22)} label={b.name} unlocked={earned} color={col} />
+                  );
+                })}
+              </div>
+
+              <H2 style={{ fontSize: 18, marginBottom: 10 }}>Recent practice</H2>
+              {completedScenarios.length === 0 ? (
+                <Card style={{ padding: 20, textAlign: "center" }}>
+                  <Body size={14} color={NC.inkMute}>
+                    No scenarios completed yet. Start practising to see your progress here.
+                  </Body>
+                </Card>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {completedScenarios.slice(0, 6).map((sid) => {
+                    const s = scenarioById(sid);
+                    return s ? (
+                      <RecentRow key={sid} categoryLabel={s.category} title={s.title} when="Completed" />
+                    ) : null;
+                  })}
+                </div>
+              )}
+            </>
+          ) : (
+            <div>
+              <Body size={14} color={NC.inkMute} style={{ marginBottom: 14 }}>
+                Open a past session to re-read the transcript and coaching feedback.
+              </Body>
+              {combinedHistoryRows.length === 0 ? (
+                <Card style={{ padding: 20, textAlign: "center" }}>
+                  <Body size={14} color={NC.inkMute}>
+                    No saved sessions yet. Finish a conversation to see it here.
+                  </Body>
+                </Card>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {combinedHistoryRows.map((row) => (
+                    <div
+                      key={row.id}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 12,
+                        background: NC.card,
+                        borderRadius: 14,
+                        padding: "14px 16px",
+                        border: `1px solid ${NC.cardEdge}`,
+                        boxShadow: NC.shadow,
+                      }}
+                    >
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontFamily: NC.sans, fontSize: 15, fontWeight: 600, color: NC.ink }}>{sessionRowTitle(row)}</div>
+                        <Body size={12} color={NC.inkMute} style={{ marginTop: 4 }}>
+                          {formatSessionWhen(row.created_at)}
+                        </Body>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setHistoryReview(row);
+                          setScreen("history-review");
+                        }}
+                        style={{
+                          padding: "8px 12px",
+                          borderRadius: 12,
+                          border: `1px solid ${NC.cardEdge}`,
+                          background: NC.tealSoft,
+                          color: NC.ink,
+                          fontFamily: NC.sans,
+                          fontSize: 13,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Review
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </ScreenColumn>
+      </Paper>
+    );
+  };
 
   const renderHistoryReview = () => {
     const row = historyReview;
     if (!row) return null;
     const fb = row.feedback;
     return (
-      <div style={{ minHeight: "100vh", background: colors.bg }}>
-        <div style={{ maxWidth: 420, margin: "0 auto", padding: "0 20px", paddingBottom: 40 }}>
-          <div style={{ display: "flex", alignItems: "center", paddingTop: 20, paddingBottom: 16 }}>
+      <Paper style={{ minHeight: "100vh" }}>
+        <ScreenColumn style={{ paddingBottom: 32 }}>
+          <div style={{ paddingTop: 12, paddingBottom: 16 }}>
             <button
+              type="button"
               onClick={() => {
                 setHistoryReview(null);
                 setScreen("progress");
                 setProgressTab("history");
               }}
-              style={{ ...baseBtn, background: "transparent", color: colors.primary, padding: "8px 0", fontSize: 15 }}
+              style={{ background: "none", border: "none", color: NC.teal, fontFamily: NC.sans, fontSize: 15, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6, padding: 0 }}
             >
-              ← History
+              {NCIcon.back(18)} History
             </button>
           </div>
-          <h2 style={{ fontFamily: "'Nunito', sans-serif", fontSize: 22, fontWeight: 800, color: colors.primaryDark, margin: "0 0 4px 0" }}>{sessionRowTitle(row)}</h2>
-          <p style={{ fontFamily: "'Nunito', sans-serif", fontSize: 13, color: colors.textMuted, marginBottom: 16 }}>{formatSessionWhen(row.created_at)}</p>
+          <H2 style={{ fontSize: 22, marginBottom: 4 }}>{sessionRowTitle(row)}</H2>
+          <Body size={13} color={NC.inkMute} style={{ marginBottom: 16 }}>
+            {formatSessionWhen(row.created_at)}
+          </Body>
 
-          <h3 style={{ fontFamily: "'Nunito', sans-serif", fontSize: 15, fontWeight: 800, color: colors.primaryDark, marginBottom: 10 }}>Transcript</h3>
+          <H2 style={{ fontSize: 16, marginBottom: 10 }}>Transcript</H2>
           <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 22 }}>
             {(row.messages || []).map((msg, i) => (
-              <div
-                key={i}
-                style={{
-                  alignSelf: msg.sender === "user" ? "flex-end" : "flex-start",
-                  maxWidth: "90%",
-                  background: msg.sender === "user" ? colors.chatBubbleUser : colors.chatBubbleAI,
-                  border: `1px solid ${colors.border}`,
-                  borderRadius: 14,
-                  padding: "10px 14px",
-                  fontFamily: "'Nunito', sans-serif",
-                  fontSize: 14,
-                  lineHeight: 1.5,
-                  color: colors.text,
-                }}
-              >
-                <span style={{ fontSize: 11, fontWeight: 800, color: colors.textMuted, display: "block", marginBottom: 4 }}>
+              <Bubble key={i} side={msg.sender === "user" ? "user" : "ai"}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: msg.sender === "user" ? NC.paper : NC.inkMute, display: "block", marginBottom: 4, opacity: 0.85 }}>
                   {msg.sender === "user" ? "You" : "Partner"}
                 </span>
                 {msg.text}
-              </div>
+              </Bubble>
             ))}
           </div>
 
-          {fb && (
+          {fb ? (
             <>
-              <h3 style={{ fontFamily: "'Nunito', sans-serif", fontSize: 15, fontWeight: 800, color: colors.primaryDark, marginBottom: 10 }}>Saved feedback</h3>
-              <div style={{ background: colors.greenLight, border: `1.5px solid ${colors.greenBorder}`, borderRadius: 14, padding: "14px 16px", marginBottom: 12 }}>
-                <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 14, fontWeight: 800, color: "#276749", marginBottom: 8 }}>Strengths</div>
+              <H2 style={{ fontSize: 16, marginBottom: 10 }}>Saved feedback</H2>
+              <FeedbackCard tone={NC.sageSoft} ink="#5A7155" border={NC.sage} title="Strengths" eyebrow="Saved">
                 {(fb.strengths || []).map((s, i) => (
-                  <div key={i} style={{ fontFamily: "'Nunito', sans-serif", fontSize: 13, color: "#276749", marginBottom: 4 }}>
-                    • {s}
-                  </div>
+                  <FBPoint key={i}>{s}</FBPoint>
                 ))}
-              </div>
+              </FeedbackCard>
               {(fb.explore || []).length > 0 ? (
-                <div style={{ background: colors.amberLight, border: `1.5px solid ${colors.amberBorder}`, borderRadius: 14, padding: "14px 16px", marginBottom: 12 }}>
-                  <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 14, fontWeight: 800, color: "#9C4221", marginBottom: 8 }}>Things to explore</div>
-                  {(fb.explore || []).map((s, i) => (
-                    <div key={i} style={{ fontFamily: "'Nunito', sans-serif", fontSize: 13, color: "#9C4221", marginBottom: 4 }}>
-                      • {s}
-                    </div>
-                  ))}
+                <div style={{ marginTop: 12 }}>
+                  <FeedbackCard tone={NC.butterSoft} ink="#8A6A1F" border={NC.butter} title="Things to explore" eyebrow="Notes">
+                    {(fb.explore || []).map((s, i) => (
+                      <FBPoint key={i}>{s}</FBPoint>
+                    ))}
+                  </FeedbackCard>
                 </div>
               ) : null}
             </>
-          )}
+          ) : null}
 
-          <button
-            type="button"
-            onClick={() => startReplayFromSession(row)}
-            style={{
-              ...baseBtn,
-              width: "100%",
-              marginTop: 8,
-              background: colors.primaryLight,
-              color: colors.primaryDark,
-              padding: "14px 16px",
-              fontSize: 15,
-              border: `1px solid ${colors.border}`,
-            }}
-          >
+          <GhostButton style={{ marginTop: 12 }} onClick={() => startReplayFromSession(row)}>
             Replay with different choices
-          </button>
+          </GhostButton>
 
-          <button
-            type="button"
+          <GhostButton
+            style={{ marginTop: 8, color: NC.terracotta, borderColor: `${NC.terracotta}55` }}
             onClick={() => deleteSessionRecord(row)}
-            style={{
-              ...baseBtn,
-              width: "100%",
-              marginTop: 8,
-              background: colors.card,
-              color: "#9B2C2C",
-              padding: "14px 16px",
-              fontSize: 15,
-              border: `1px solid ${colors.border}`,
-            }}
           >
             Delete this session
-          </button>
-        </div>
-      </div>
+          </GhostButton>
+        </ScreenColumn>
+      </Paper>
     );
   };
 
   const renderPrepareTomorrow = () => (
-    <div style={{ minHeight: "100vh", background: colors.bg }}>
-      <div style={{ maxWidth: 420, margin: "0 auto", padding: "0 20px", paddingBottom: 40 }}>
-        <div style={{ display: "flex", alignItems: "center", paddingTop: 20, paddingBottom: 16 }}>
-          <button onClick={() => setScreen("home")} style={{ ...baseBtn, background: "transparent", color: colors.primary, padding: "8px 0", fontSize: 15 }}>
-            ← Back
+    <Paper style={{ minHeight: "100vh" }}>
+      <ScreenColumn style={{ paddingBottom: 32 }}>
+        <div style={{ paddingTop: 12, paddingBottom: 16 }}>
+          <button type="button" onClick={() => setScreen("home")} style={{ background: "none", border: "none", color: NC.teal, cursor: "pointer", fontFamily: NC.sans, fontSize: 15, display: "inline-flex", alignItems: "center", gap: 6, padding: 0 }}>
+            {NCIcon.back(18)} Back
           </button>
         </div>
-        <h2 style={{ fontFamily: "'Nunito', sans-serif", fontSize: 24, fontWeight: 800, color: colors.primaryDark, margin: "0 0 8px 0" }}>Prepare for Tomorrow</h2>
-        <p style={{ fontFamily: "'Nunito', sans-serif", fontSize: 14, color: colors.textMuted, lineHeight: 1.6, marginBottom: 20 }}>
+        <H1 style={{ fontSize: 26, marginBottom: 8 }}>Prepare for Tomorrow</H1>
+        <Body size={14} color={NC.inkSoft} style={{ marginBottom: 20, lineHeight: 1.6 }}>
           Describe something coming up — a meeting, appointment, or social situation. We&apos;ll suggest a few matching practice scenarios and a short coaching tip.
-        </p>
-        <label style={{ fontFamily: "'Nunito', sans-serif", fontSize: 13, fontWeight: 700, color: colors.text }}>What&apos;s coming up?</label>
+        </Body>
+        <label style={{ fontFamily: NC.sans, fontSize: 13, fontWeight: 600, color: NC.ink }}>What&apos;s coming up?</label>
         <textarea
           value={prepareDraft.eventTitle}
           onChange={(e) => setPrepareDraft((d) => ({ ...d, eventTitle: e.target.value }))}
@@ -2196,14 +2485,15 @@ export default function NeuroChat() {
             boxSizing: "border-box",
             marginTop: 8,
             marginBottom: 14,
-            fontFamily: "'Nunito', sans-serif",
+            fontFamily: NC.sans,
             fontSize: 15,
             padding: "12px 14px",
             borderRadius: 12,
-            border: `1px solid ${colors.border}`,
+            border: `1px solid ${NC.cardEdge}`,
+            background: NC.card,
           }}
         />
-        <label style={{ fontFamily: "'Nunito', sans-serif", fontSize: 13, fontWeight: 700, color: colors.text }}>Date (optional)</label>
+        <label style={{ fontFamily: NC.sans, fontSize: 13, fontWeight: 600, color: NC.ink }}>Date (optional)</label>
         <input
           type="date"
           value={prepareDraft.eventDate}
@@ -2213,52 +2503,50 @@ export default function NeuroChat() {
             boxSizing: "border-box",
             marginTop: 8,
             marginBottom: 18,
-            fontFamily: "'Nunito', sans-serif",
+            fontFamily: NC.sans,
             fontSize: 15,
             padding: "10px 12px",
             borderRadius: 12,
-            border: `1px solid ${colors.border}`,
+            border: `1px solid ${NC.cardEdge}`,
+            background: NC.card,
           }}
         />
-        <button
-          type="button"
-          disabled={prepareBusy || !prepareDraft.eventTitle.trim()}
-          onClick={() => runPreparePlan()}
-          style={{
-            ...baseBtn,
-            width: "100%",
-            background: prepareBusy || !prepareDraft.eventTitle.trim() ? colors.border : colors.primary,
-            color: "#fff",
-            padding: "16px 20px",
-            fontSize: 16,
-          }}
-        >
+        <PrimaryButton kind="ink" disabled={prepareBusy || !prepareDraft.eventTitle.trim()} onClick={() => runPreparePlan()}>
           {prepareBusy ? "Building your plan…" : "Save plan & go home"}
-        </button>
-        {preparePlan?.headline && (
-          <div style={{ marginTop: 20, padding: 14, background: colors.primaryLight, borderRadius: 12, fontFamily: "'Nunito', sans-serif", fontSize: 13, color: colors.text }}>
-            <strong>Current plan:</strong> {preparePlan.headline}
-            <button type="button" onClick={() => clearPreparePlan()} style={{ ...baseBtn, display: "block", marginTop: 10, background: "transparent", color: colors.primary, fontSize: 13 }}>
+        </PrimaryButton>
+        {preparePlan?.headline ? (
+          <Card style={{ marginTop: 20, padding: 14, background: NC.tealSoft }}>
+            <Body size={13} color={NC.ink}>
+              <strong>Current plan:</strong> {preparePlan.headline}
+            </Body>
+            <button type="button" onClick={() => clearPreparePlan()} style={{ display: "block", marginTop: 10, background: "transparent", border: "none", color: NC.teal, fontSize: 13, cursor: "pointer", padding: 0 }}>
               Clear saved plan
             </button>
-          </div>
-        )}
-      </div>
-    </div>
+          </Card>
+        ) : null}
+      </ScreenColumn>
+    </Paper>
   );
 
   const renderCustomBuild = () => (
-    <div style={{ minHeight: "100vh", background: colors.bg }}>
-      <div style={{ maxWidth: 420, margin: "0 auto", padding: "0 20px", paddingBottom: 40 }}>
-        <div style={{ display: "flex", alignItems: "center", paddingTop: 20, paddingBottom: 16 }}>
-          <button onClick={() => { setScreen("scenarios"); setGeneratedCustomScenario(null); }} style={{ ...baseBtn, background: "transparent", color: colors.primary, padding: "8px 0", fontSize: 15 }}>
-            ← Scenarios
+    <Paper style={{ minHeight: "100vh" }}>
+      <ScreenColumn style={{ paddingBottom: 32 }}>
+        <div style={{ paddingTop: 12, paddingBottom: 16 }}>
+          <button
+            type="button"
+            onClick={() => {
+              setScreen("scenarios");
+              setGeneratedCustomScenario(null);
+            }}
+            style={{ background: "none", border: "none", color: NC.teal, cursor: "pointer", fontFamily: NC.sans, fontSize: 15, display: "inline-flex", alignItems: "center", gap: 6, padding: 0 }}
+          >
+            {NCIcon.back(18)} Scenarios
           </button>
         </div>
-        <h2 style={{ fontFamily: "'Nunito', sans-serif", fontSize: 24, fontWeight: 800, color: colors.primaryDark, margin: "0 0 8px 0" }}>Custom Scenario</h2>
-        <p style={{ fontFamily: "'Nunito', sans-serif", fontSize: 14, color: colors.textMuted, lineHeight: 1.6, marginBottom: 16 }}>
+        <H1 style={{ fontSize: 26, marginBottom: 8 }}>Custom Scenario</H1>
+        <Body size={14} color={NC.inkSoft} style={{ marginBottom: 16, lineHeight: 1.6 }}>
           Describe the situation in your own words. We&apos;ll generate a short scenario you can practise immediately and optionally save to reuse later.
-        </p>
+        </Body>
         <textarea
           value={customDraft}
           onChange={(e) => setCustomDraft(e.target.value)}
@@ -2267,148 +2555,192 @@ export default function NeuroChat() {
           style={{
             width: "100%",
             boxSizing: "border-box",
-            fontFamily: "'Nunito', sans-serif",
+            fontFamily: NC.sans,
             fontSize: 15,
             padding: "12px 14px",
             borderRadius: 12,
-            border: `1px solid ${colors.border}`,
+            border: `1px solid ${NC.cardEdge}`,
             marginBottom: 12,
+            background: NC.card,
           }}
         />
-        <button
-          type="button"
-          disabled={customBusy || !customDraft.trim()}
-          onClick={() => generateCustomScenario()}
-          style={{
-            ...baseBtn,
-            width: "100%",
-            background: customBusy || !customDraft.trim() ? colors.border : colors.primary,
-            color: "#fff",
-            padding: "14px 18px",
-            fontSize: 15,
-            marginBottom: 18,
-          }}
-        >
+        <PrimaryButton kind="ink" disabled={customBusy || !customDraft.trim()} onClick={() => generateCustomScenario()} style={{ marginBottom: 18 }}>
           {customBusy ? "Generating…" : "Generate scenario"}
-        </button>
+        </PrimaryButton>
 
-        {generatedCustomScenario && (
-          <div style={{ background: colors.card, border: `1px solid ${colors.greenBorder}`, borderRadius: 16, padding: "16px 18px", marginBottom: 14 }}>
-            <div style={{ fontSize: 28, marginBottom: 8 }}>{generatedCustomScenario.icon}</div>
-            <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 18, fontWeight: 800, color: colors.text }}>{generatedCustomScenario.title}</div>
-            <p style={{ fontFamily: "'Nunito', sans-serif", fontSize: 14, color: colors.textMuted, lineHeight: 1.55 }}>{generatedCustomScenario.description}</p>
-            <p style={{ fontFamily: "'Nunito', sans-serif", fontSize: 13, color: colors.text, fontStyle: "italic", marginTop: 10 }}>
+        {generatedCustomScenario ? (
+          <Card style={{ padding: "18px 18px", border: `1px solid ${NC.sage}40` }}>
+            <div style={{ marginBottom: 8, color: NC.teal }}>{NCIcon[generatedCustomScenario.icon] ? NCIcon[generatedCustomScenario.icon](28) : NCIcon.bubble(28)}</div>
+            <div style={{ fontFamily: NC.serif, fontSize: 18, fontWeight: 600, color: NC.ink }}>{generatedCustomScenario.title}</div>
+            <Body size={14} color={NC.inkSoft} style={{ marginTop: 8, lineHeight: 1.55 }}>
+              {generatedCustomScenario.description}
+            </Body>
+            <Body size={13} color={NC.ink} style={{ fontStyle: "italic", marginTop: 10 }}>
               Opens with: &ldquo;{generatedCustomScenario.opener}&rdquo;
-            </p>
+            </Body>
             <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 14 }}>
-              <button type="button" onClick={() => startScenario(generatedCustomScenario)} style={{ ...baseBtn, background: colors.primary, color: "#fff", padding: "14px 18px", fontSize: 15 }}>
+              <PrimaryButton kind="ink" onClick={() => startScenario(generatedCustomScenario)}>
                 Start this practice chat
-              </button>
-              <button type="button" onClick={() => saveGeneratedToLibrary()} style={{ ...baseBtn, background: colors.accentLight, color: colors.text, padding: "14px 18px", fontSize: 15, border: `1px solid ${colors.accent}` }}>
-                Save to my scenarios &amp; browse list
-              </button>
+              </PrimaryButton>
+              <GhostButton onClick={() => saveGeneratedToLibrary()}>Save to my scenarios &amp; browse list</GhostButton>
             </div>
-          </div>
-        )}
-      </div>
-    </div>
+          </Card>
+        ) : null}
+      </ScreenColumn>
+    </Paper>
   );
 
   const renderSettings = () => (
-    <div style={{ minHeight: "100vh", background: colors.bg }}>
-      <div style={{ maxWidth: 420, margin: "0 auto", padding: "0 20px", paddingBottom: 40 }}>
-        <div style={{ display: "flex", alignItems: "center", paddingTop: 20, paddingBottom: 16 }}>
-          <button onClick={() => setScreen("home")} style={{ ...baseBtn, background: "transparent", color: colors.primary, padding: "8px 0", fontSize: 15 }}>
-            ← Back
-          </button>
-        </div>
-        <h2 style={{ fontFamily: "'Nunito', sans-serif", fontSize: 24, fontWeight: 800, color: colors.primaryDark, margin: "0 0 10px 0" }}>Settings</h2>
-        <div style={{ background: colors.card, border: `1px solid ${colors.border}`, borderRadius: 14, padding: "14px 16px", marginBottom: 14 }}>
-          <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 15, fontWeight: 700, color: colors.text, marginBottom: 6 }}>Conversation pacing</div>
-          <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 13, color: colors.textMuted, lineHeight: 1.5, marginBottom: 10 }}>
-            Give me more time to think: waits 2 extra seconds before AI replies, hides the turn counter, and keeps suggestions always available.
-          </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={pacingMode}
-            onClick={() => persistPacingMode(!pacingMode)}
-            style={{ ...baseBtn, background: pacingMode ? colors.green : colors.border, color: pacingMode ? "#fff" : colors.textMuted, fontSize: 13, padding: "8px 14px", borderRadius: 999 }}
-          >
-            {pacingMode ? "Pacing mode: On" : "Pacing mode: Off"}
-          </button>
+    <Paper style={{ minHeight: "100vh" }}>
+      <ScreenColumn style={{ paddingBottom: 32 }}>
+        <TopBar
+          left={
+            <button type="button" onClick={() => setScreen("home")} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: NC.ink }}>
+              {NCIcon.back(18)}
+            </button>
+          }
+          center="Settings"
+        />
+        <div style={{ paddingTop: 8, paddingBottom: 18 }}>
+          <H1 style={{ fontSize: 28 }}>
+            Make it
+            <br />
+            yours.
+          </H1>
         </div>
 
-        <div style={{ background: colors.card, border: `1px solid ${colors.border}`, borderRadius: 14, padding: "14px 16px" }}>
-          <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 15, fontWeight: 700, color: colors.text, marginBottom: 6 }}>Institution admin dashboard (MVP)</div>
-          <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 13, color: colors.textMuted, lineHeight: 1.5, marginBottom: 10 }}>
-            Enter your organisation ID to load aggregated anonymised stats.
+        <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+          <SettingsGroup title="Comfort">
+            <SettingsRow label="Give me more time to think" hint="Hides the turn dots, keeps suggestions visible." isFirst>
+              <Toggle checked={pacingMode} onChange={(v) => persistPacingMode(v)} />
+            </SettingsRow>
+            <SettingsRow label="Show social cue hints" hint="Adds a small ‘what just happened?’ under AI replies.">
+              <Toggle checked={showHintsInChat} onChange={(v) => persistHintsPreference(v)} />
+            </SettingsRow>
+            <SettingsRow label="Larger text" hint="Coming soon — increases body text by 2px.">
+              <span style={{ fontFamily: NC.mono, fontSize: 10, color: NC.inkMute, textTransform: "uppercase", letterSpacing: "0.1em" }}>soon</span>
+            </SettingsRow>
+          </SettingsGroup>
+
+          <SettingsGroup title="Account">
+            <SettingsRow label="Signed in as" hint={authUser?.email || "Guest"} isFirst>
+              {authUser?.email ? (
+                <span style={{ fontFamily: NC.mono, fontSize: 11, color: NC.sage, textTransform: "uppercase", letterSpacing: "0.1em" }}>active</span>
+              ) : (
+                <span style={{ fontFamily: NC.mono, fontSize: 11, color: NC.inkMute, textTransform: "uppercase", letterSpacing: "0.1em" }}>guest</span>
+              )}
+            </SettingsRow>
+            <SettingsRow label="Member since" hint={authUser?.created_at ? formatDateShort(authUser.created_at) : "—"} />
+          </SettingsGroup>
+
+          <div>
+            <Eyebrow style={{ marginBottom: 8 }}>Institution</Eyebrow>
+            <Card style={{ padding: 16 }}>
+              <Body size={15} color={NC.ink} style={{ fontWeight: 600, marginBottom: 4 }}>
+                Admin dashboard (MVP)
+              </Body>
+              <Body size={12} color={NC.inkMute} style={{ marginBottom: 10 }}>
+                Enter your organisation ID to load aggregated anonymised stats.
+              </Body>
+              <input
+                value={adminOrgIdInput}
+                onChange={(e) => {
+                  setAdminOrgIdInput(e.target.value);
+                  setAdminError("");
+                }}
+                placeholder="Organisation UUID"
+                style={{
+                  width: "100%",
+                  boxSizing: "border-box",
+                  fontFamily: NC.sans,
+                  fontSize: 14,
+                  borderRadius: 10,
+                  border: `1px solid ${NC.cardEdge}`,
+                  padding: "10px 12px",
+                  marginBottom: 10,
+                  background: NC.paper,
+                }}
+              />
+              <PrimaryButton kind="ink" disabled={adminLoading || !adminOrgIdInput.trim()} onClick={loadAdminDashboard} style={{ minHeight: 48, fontSize: 14 }}>
+                {adminLoading ? "Loading dashboard…" : "Open admin dashboard"}
+              </PrimaryButton>
+              {adminError ? (
+                <Body size={12} color={NC.terracotta} style={{ marginTop: 8 }}>
+                  {adminError}
+                </Body>
+              ) : null}
+            </Card>
           </div>
-          <input
-            value={adminOrgIdInput}
-            onChange={(e) => {
-              setAdminOrgIdInput(e.target.value);
-              setAdminError("");
-            }}
-            placeholder="Organisation UUID"
-            style={{ width: "100%", boxSizing: "border-box", fontFamily: "'Nunito', sans-serif", fontSize: 14, borderRadius: 10, border: `1px solid ${colors.border}`, padding: "10px 12px", marginBottom: 10 }}
-          />
-          <button onClick={loadAdminDashboard} disabled={adminLoading || !adminOrgIdInput.trim()} style={{ ...baseBtn, width: "100%", background: adminLoading || !adminOrgIdInput.trim() ? colors.border : colors.primary, color: "#fff", padding: "12px 14px", fontSize: 14 }}>
-            {adminLoading ? "Loading dashboard…" : "Open admin dashboard"}
-          </button>
-          {adminError && <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 12, color: "#9C4221", marginTop: 8 }}>{adminError}</div>}
         </div>
-      </div>
-    </div>
+      </ScreenColumn>
+    </Paper>
   );
 
   const renderShareCard = () => (
-    <div style={{ minHeight: "100vh", background: colors.bg }}>
-      <div style={{ maxWidth: 420, margin: "0 auto", padding: "0 20px", paddingBottom: 40 }}>
-        <div style={{ display: "flex", alignItems: "center", paddingTop: 20, paddingBottom: 16 }}>
-          <button onClick={() => setScreen("progress")} style={{ ...baseBtn, background: "transparent", color: colors.primary, padding: "8px 0", fontSize: 15 }}>
-            ← Progress
+    <Paper style={{ minHeight: "100vh" }}>
+      <ScreenColumn style={{ paddingBottom: 32 }}>
+        <div style={{ paddingTop: 12, paddingBottom: 16 }}>
+          <button type="button" onClick={() => setScreen("progress")} style={{ background: "none", border: "none", color: NC.teal, cursor: "pointer", fontFamily: NC.sans, fontSize: 15, display: "inline-flex", alignItems: "center", gap: 6, padding: 0 }}>
+            {NCIcon.back(18)} Progress
           </button>
         </div>
-        <h2 style={{ fontFamily: "'Nunito', sans-serif", fontSize: 24, fontWeight: 800, color: colors.primaryDark, margin: "0 0 8px 0" }}>Share your progress</h2>
-        <p style={{ fontFamily: "'Nunito', sans-serif", fontSize: 14, color: colors.textMuted, marginBottom: 12 }}>
+        <H1 style={{ fontSize: 26, marginBottom: 8 }}>Share your progress</H1>
+        <Body size={14} color={NC.inkMute} style={{ marginBottom: 12 }}>
           This card contains only progress stats. No conversation text is included.
-        </p>
+        </Body>
         {shareCardUrl ? (
-          <img src={shareCardUrl} alt="NeuroChat progress card" style={{ width: "100%", borderRadius: 14, border: `1px solid ${colors.border}`, boxShadow: colors.shadow }} />
+          <img src={shareCardUrl} alt="NeuroChat progress card" style={{ width: "100%", borderRadius: NC.rMd, border: `1px solid ${NC.cardEdge}`, boxShadow: NC.shadow }} />
         ) : (
-          <div style={{ background: colors.card, border: `1px solid ${colors.border}`, borderRadius: 14, padding: "20px", fontFamily: "'Nunito', sans-serif", fontSize: 14, color: colors.textMuted, textAlign: "center" }}>
-            No card yet. Generate one from Progress.
-          </div>
+          <Card style={{ padding: 20, textAlign: "center" }}>
+            <Body size={14} color={NC.inkMute}>
+              No card yet. Generate one from Progress.
+            </Body>
+          </Card>
         )}
         <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12 }}>
-          <button onClick={generateShareCard} style={{ ...baseBtn, width: "100%", background: colors.primary, color: "#fff", padding: "14px 16px", fontSize: 15 }}>
+          <PrimaryButton kind="ink" onClick={generateShareCard}>
             Regenerate card
-          </button>
-          {shareCardUrl && (
-            <a href={shareCardUrl} download="neurochat-progress-card.png" style={{ ...baseBtn, width: "100%", background: colors.card, color: colors.primaryDark, padding: "14px 16px", fontSize: 15, border: `1px solid ${colors.border}`, textAlign: "center", textDecoration: "none" }}>
+          </PrimaryButton>
+          {shareCardUrl ? (
+            <a
+              href={shareCardUrl}
+              download="neurochat-progress-card.png"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                minHeight: 52,
+                padding: "0 22px",
+                borderRadius: 16,
+                background: "transparent",
+                color: NC.ink,
+                border: `1.5px solid ${NC.cardEdge}`,
+                fontFamily: NC.sans,
+                fontSize: 16,
+                fontWeight: 500,
+                textDecoration: "none",
+              }}
+            >
               Download PNG
             </a>
-          )}
+          ) : null}
         </div>
-      </div>
-    </div>
+      </ScreenColumn>
+    </Paper>
   );
 
   const renderAdminDashboard = () => (
-    <div style={{ minHeight: "100vh", background: colors.bg }}>
-      <div style={{ maxWidth: 420, margin: "0 auto", padding: "0 20px", paddingBottom: 40 }}>
-        <div style={{ display: "flex", alignItems: "center", paddingTop: 20, paddingBottom: 16 }}>
-          <button onClick={() => setScreen("settings")} style={{ ...baseBtn, background: "transparent", color: colors.primary, padding: "8px 0", fontSize: 15 }}>
-            ← Settings
+    <Paper style={{ minHeight: "100vh" }}>
+      <ScreenColumn style={{ paddingBottom: 32 }}>
+        <div style={{ paddingTop: 12, paddingBottom: 16 }}>
+          <button type="button" onClick={() => setScreen("settings")} style={{ background: "none", border: "none", color: NC.teal, cursor: "pointer", fontFamily: NC.sans, fontSize: 15, display: "inline-flex", alignItems: "center", gap: 6, padding: 0 }}>
+            {NCIcon.back(18)} Settings
           </button>
         </div>
-        <h2 style={{ fontFamily: "'Nunito', sans-serif", fontSize: 24, fontWeight: 800, color: colors.primaryDark, margin: "0 0 8px 0" }}>
-          {adminData?.organisation?.name || "Institution Dashboard"}
-        </h2>
-        <p style={{ fontFamily: "'Nunito', sans-serif", fontSize: 13, color: colors.textMuted, marginBottom: 14 }}>
+        <H1 style={{ fontSize: 24, marginBottom: 8 }}>{adminData?.organisation?.name || "Institution Dashboard"}</H1>
+        <Body size={13} color={NC.inkMute} style={{ marginBottom: 14 }}>
           Anonymised aggregate data only. No transcripts or mood data shown.
-        </p>
+        </Body>
         {adminData ? (
           <>
             <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
@@ -2417,154 +2749,201 @@ export default function NeuroChat() {
                 { label: "Total sessions", value: adminData.totals?.totalSessions ?? 0 },
                 { label: "Active (7d)", value: adminData.totals?.activeLast7Days ?? 0 },
               ].map((kpi) => (
-                <div key={kpi.label} style={{ flex: "1 1 110px", background: colors.card, border: `1px solid ${colors.border}`, borderRadius: 12, padding: "12px 10px", textAlign: "center" }}>
-                  <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 24, fontWeight: 800, color: colors.primaryDark }}>{kpi.value}</div>
-                  <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 12, color: colors.textMuted }}>{kpi.label}</div>
+                <div key={kpi.label} style={{ flex: "1 1 110px", background: NC.card, border: `1px solid ${NC.cardEdge}`, borderRadius: 12, padding: "12px 10px", textAlign: "center" }}>
+                  <div style={{ fontFamily: NC.serif, fontSize: 24, fontWeight: 600, color: NC.ink }}>{kpi.value}</div>
+                  <div style={{ fontFamily: NC.sans, fontSize: 12, color: NC.inkMute }}>{kpi.label}</div>
                 </div>
               ))}
             </div>
 
-            <h3 style={{ fontFamily: "'Nunito', sans-serif", fontSize: 16, fontWeight: 800, color: colors.primaryDark, marginBottom: 8 }}>Most popular scenarios</h3>
-            <div style={{ background: colors.card, border: `1px solid ${colors.border}`, borderRadius: 12, padding: "10px 12px", marginBottom: 14 }}>
+            <H2 style={{ fontSize: 16, marginBottom: 8 }}>Most popular scenarios</H2>
+            <Card style={{ padding: "10px 12px", marginBottom: 14 }}>
               {(adminData.topScenarios || []).length === 0 ? (
-                <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 13, color: colors.textMuted }}>No sessions yet.</div>
+                <Body size={13} color={NC.inkMute}>
+                  No sessions yet.
+                </Body>
               ) : (
                 (adminData.topScenarios || []).map((row) => (
-                  <div key={row.scenarioId} style={{ display: "flex", justifyContent: "space-between", fontFamily: "'Nunito', sans-serif", fontSize: 13, color: colors.text, padding: "5px 0" }}>
+                  <div key={row.scenarioId} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: NC.ink, padding: "5px 0" }}>
                     <span>{scenarioById(row.scenarioId)?.title || row.scenarioId}</span>
                     <strong>{row.count}</strong>
                   </div>
                 ))
               )}
-            </div>
+            </Card>
 
-            <h3 style={{ fontFamily: "'Nunito', sans-serif", fontSize: 16, fontWeight: 800, color: colors.primaryDark, marginBottom: 8 }}>User progress snapshot</h3>
+            <H2 style={{ fontSize: 16, marginBottom: 8 }}>User progress snapshot</H2>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {(adminData.userStats || []).map((u) => (
-                <div key={u.userId} style={{ background: colors.card, border: `1px solid ${colors.border}`, borderRadius: 12, padding: "10px 12px" }}>
-                  <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 12, color: colors.textMuted }}>{u.role} · {u.userId.slice(0, 8)}…</div>
-                  <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 13, color: colors.text, marginTop: 4 }}>
+                <Card key={u.userId} style={{ padding: "10px 12px" }}>
+                  <Body size={12} color={NC.inkMute}>
+                    {u.role} · {u.userId.slice(0, 8)}…
+                  </Body>
+                  <Body size={13} color={NC.ink} style={{ marginTop: 4 }}>
                     {u.totalSessions} sessions · {u.completedScenarios} scenarios · {u.badgesEarned} badges
-                  </div>
-                  <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 11, color: colors.textMuted, marginTop: 2 }}>
+                  </Body>
+                  <Body size={11} color={NC.inkMute} style={{ marginTop: 2 }}>
                     Last active: {formatDateShort(u.lastActive) || "—"}
-                  </div>
-                </div>
+                  </Body>
+                </Card>
               ))}
             </div>
           </>
         ) : (
-          <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 14, color: colors.textMuted }}>No admin data loaded yet.</div>
+          <Body size={14} color={NC.inkMute}>
+            No admin data loaded yet.
+          </Body>
         )}
-      </div>
-    </div>
+      </ScreenColumn>
+    </Paper>
   );
 
   const renderTips = () => {
     const selectedCat = tipsData.find((c) => c.category === selectedTipCategoryKey);
+    const tipRowCat = {
+      "Starting Conversations": "social",
+      "Keeping It Going": "social",
+      "Ending Politely": "everyday",
+      "Tone & Delivery": "work",
+      "Difficult Moments": "difficult",
+      "Body Language & Non-Verbal Cues": "relationships",
+      "Digital Communication": "work",
+      "Self-Advocacy & Boundaries": "selfadvocacy",
+      "Advanced Conversation Techniques": "work",
+      "Staying Calm Under Pressure": "difficult",
+    };
+    const totalTips = tipsData.reduce((n, c) => n + (c.tips?.length || 0), 0);
+    const collections = tipsData.length;
+
     return (
-      <div style={{ minHeight: "100vh", background: colors.bg }}>
-        <div style={{ maxWidth: 420, margin: "0 auto", padding: "0 20px", paddingBottom: 40 }}>
-          <div style={{ display: "flex", alignItems: "center", paddingTop: 20, paddingBottom: 20 }}>
-            <button
-              onClick={() => (selectedTipCategoryKey !== null ? setSelectedTipCategoryKey(null) : setScreen("home"))}
-              style={{ ...baseBtn, background: "transparent", color: colors.primary, padding: "8px 0", fontSize: 15 }}
-            >
-              ← {selectedTipCategoryKey !== null ? "Categories" : "Back"}
-            </button>
+      <Paper style={{ minHeight: "100vh" }}>
+        <ScreenColumn style={{ paddingBottom: 32 }}>
+          <TopBar
+            left={
+              <button
+                type="button"
+                onClick={() => (selectedTipCategoryKey !== null ? setSelectedTipCategoryKey(null) : setScreen("home"))}
+                style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: NC.ink }}
+              >
+                {NCIcon.back(18)}
+              </button>
+            }
+            center="Tips library"
+          />
+          <div style={{ paddingTop: 8, paddingBottom: 18 }}>
+            <Eyebrow>
+              {totalTips} tips · {collections} collections
+            </Eyebrow>
+            <H1 style={{ marginTop: 6 }}>
+              Quick reads
+              <br />
+              for the moment.
+            </H1>
           </div>
-          <h2 style={{ fontFamily: "'Nunito', sans-serif", fontSize: 24, fontWeight: 800, color: colors.primaryDark, margin: "0 0 4px 0" }}>Tips Library</h2>
-          <p style={{ fontFamily: "'Nunito', sans-serif", fontSize: 14, color: colors.textMuted, margin: "0 0 24px 0" }}>Quick, practical advice you can use anytime.</p>
 
           {selectedTipCategoryKey === null ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {tipsData.map((cat) => (
-                <button
+                <TipRow
                   key={cat.category}
+                  icon={NCIcon[cat.icon] ? NCIcon[cat.icon](20) : NCIcon.bubble(20)}
+                  title={cat.category}
+                  count={cat.tips.length}
+                  catKey={tipRowCat[cat.category] || "social"}
                   onClick={() => setSelectedTipCategoryKey(cat.category)}
-                  style={{
-                    ...baseBtn,
-                    background: colors.card,
-                    border: `1px solid ${colors.border}`,
-                    borderRadius: 16,
-                    padding: "18px 20px",
-                    textAlign: "left",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 14,
-                    boxShadow: colors.shadow,
-                  }}
-                >
-                  <span style={{ fontSize: 28 }}>{cat.icon}</span>
-                  <div>
-                    <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 16, fontWeight: 700, color: colors.text }}>{cat.category}</div>
-                    <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 13, color: colors.textMuted }}>{cat.tips.length} tips</div>
-                  </div>
-                </button>
+                />
               ))}
             </div>
           ) : selectedCat ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <h3 style={{ fontFamily: "'Nunito', sans-serif", fontSize: 20, fontWeight: 800, color: colors.primaryDark, margin: "0 0 6px 0", display: "flex", alignItems: "center", gap: 10 }}>
-                <span>{selectedCat.icon}</span>
-                {selectedCat.category}
-              </h3>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                <div style={{ color: NC.teal }}>{NCIcon[selectedCat.icon] ? NCIcon[selectedCat.icon](24) : NCIcon.bubble(24)}</div>
+                <H2 style={{ fontSize: 20, margin: 0 }}>{selectedCat.category}</H2>
+              </div>
               {selectedCat.tips.map((tip, i) => (
-                <div key={i} style={{ background: colors.card, border: `1px solid ${colors.border}`, borderRadius: 16, padding: "16px 20px", boxShadow: colors.shadow }}>
-                  <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 15, fontWeight: 700, color: colors.text, marginBottom: 6 }}>{tip.title}</div>
-                  <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 14, color: colors.textMuted, lineHeight: 1.6 }}>{tip.body}</div>
-                </div>
+                <Card key={i} style={{ padding: "16px 18px" }}>
+                  <Body size={15} color={NC.ink} style={{ fontWeight: 600, marginBottom: 6 }}>
+                    {tip.title}
+                  </Body>
+                  <Body size={14} color={NC.inkSoft} style={{ lineHeight: 1.6 }}>
+                    {tip.body}
+                  </Body>
+                </Card>
               ))}
             </div>
           ) : null}
-        </div>
-      </div>
+        </ScreenColumn>
+      </Paper>
     );
   };
 
   const renderHowTo = () => (
-    <div style={{ minHeight: "100vh", background: colors.bg }}>
-      <div style={{ maxWidth: 420, margin: "0 auto", padding: "0 20px", paddingBottom: 40 }}>
-        <div style={{ display: "flex", alignItems: "center", paddingTop: 20, paddingBottom: 20 }}>
-          <button onClick={() => setScreen("home")} style={{ ...baseBtn, background: "transparent", color: colors.primary, padding: "8px 0", fontSize: 15 }}>← Back</button>
+    <Paper style={{ minHeight: "100vh" }}>
+      <ScreenColumn style={{ paddingBottom: 32 }}>
+        <div style={{ paddingTop: 12, paddingBottom: 16 }}>
+          <button type="button" onClick={() => setScreen("home")} style={{ background: "none", border: "none", color: NC.teal, cursor: "pointer", fontFamily: NC.sans, fontSize: 15, display: "inline-flex", alignItems: "center", gap: 6, padding: 0 }}>
+            {NCIcon.back(18)} Back
+          </button>
         </div>
-        <h2 style={{ fontFamily: "'Nunito', sans-serif", fontSize: 24, fontWeight: 800, color: colors.primaryDark, margin: "0 0 16px 0" }}>How NeuroChat Works</h2>
+        <H1 style={{ fontSize: 26, marginBottom: 16 }}>How NeuroChat Works</H1>
 
-        <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 18, fontWeight: 800, color: colors.primary, marginBottom: 8 }}>You can't get this wrong.</div>
-        <p style={{ fontFamily: "'Nunito', sans-serif", fontSize: 15, color: colors.text, lineHeight: 1.7, marginBottom: 28 }}>
-          NeuroChat is a safe space to practise conversations before you have them in real life. There's no scoring, no timer, and no one watching. Just you, practising at your own pace.
-        </p>
+        <Body size={17} color={NC.teal} style={{ fontWeight: 600, marginBottom: 8 }}>
+          You can&apos;t get this wrong.
+        </Body>
+        <Body size={15} color={NC.inkSoft} style={{ marginBottom: 28, lineHeight: 1.7 }}>
+          NeuroChat is a safe space to practise conversations before you have them in real life. There&apos;s no scoring, no timer, and no one watching. Just you, practising at your own pace.
+        </Body>
 
         {[
           { step: "1", title: "Pick a scenario", desc: "Choose a situation you'd like to practise — like introducing yourself, making small talk, or handling a tricky conversation." },
-          { step: "2", title: "Have a conversation", desc: "The app plays the other person. You type (or speak) your replies naturally. If you get stuck, tap for a suggested response." },
+          { step: "2", title: "Have a conversation", desc: "The app plays the other person. You type your replies naturally. If you get stuck, tap for a suggested response." },
           { step: "3", title: "Get gentle feedback", desc: "After the conversation, you'll see what went well and one or two things you could try differently. Strengths are always shown first." },
           { step: "4", title: "Learn and grow", desc: "Visit the Tips Library anytime for practical advice. Track your progress and earn badges as you practise." },
         ].map((item) => (
           <div key={item.step} style={{ display: "flex", gap: 16, marginBottom: 22, alignItems: "flex-start" }}>
-            <div style={{ width: 40, height: 40, borderRadius: "50%", background: colors.primaryLight, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Nunito', sans-serif", fontSize: 18, fontWeight: 800, color: colors.primary, flexShrink: 0 }}>
+            <div
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: "50%",
+                background: NC.tealSoft,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontFamily: NC.serif,
+                fontSize: 18,
+                fontWeight: 600,
+                color: NC.teal,
+                flexShrink: 0,
+              }}
+            >
               {item.step}
             </div>
             <div>
-              <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 16, fontWeight: 700, color: colors.text, marginBottom: 4 }}>{item.title}</div>
-              <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 14, color: colors.textMuted, lineHeight: 1.6 }}>{item.desc}</div>
+              <Body size={16} color={NC.ink} style={{ fontWeight: 600, marginBottom: 4 }}>
+                {item.title}
+              </Body>
+              <Body size={14} color={NC.inkMute} style={{ lineHeight: 1.6 }}>
+                {item.desc}
+              </Body>
             </div>
           </div>
         ))}
 
-        <div style={{ background: colors.accentLight, border: `2px solid ${colors.accent}`, borderRadius: 16, padding: "18px 20px", marginTop: 16 }}>
-          <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 15, fontWeight: 700, color: colors.text, marginBottom: 6 }}>Remember</div>
-          <div style={{ fontFamily: "'Nunito', sans-serif", fontSize: 14, color: colors.text, lineHeight: 1.6 }}>
-            This isn't a test. There are no wrong answers. The goal is simply to practise — and every time you do, you're building confidence.
-          </div>
-        </div>
-      </div>
-    </div>
+        <Card style={{ marginTop: 16, background: NC.butterSoft, border: `1px solid ${NC.butter}55` }}>
+          <Body size={15} color={NC.ink} style={{ fontWeight: 600, marginBottom: 6 }}>
+            Remember
+          </Body>
+          <Body size={14} color={NC.inkSoft} style={{ lineHeight: 1.6 }}>
+            This isn&apos;t a test. There are no wrong answers. The goal is simply to practise — and every time you do, you&apos;re building confidence.
+          </Body>
+        </Card>
+      </ScreenColumn>
+    </Paper>
   );
 
   return (
-    <div>
-      <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
+    <div style={{ minHeight: "100vh", background: NC.paper }}>
       {isBootstrapping && renderHome()}
       {!isBootstrapping && screen === "onboarding" && renderOnboarding()}
       {!isBootstrapping && screen === "auth-choice" && renderAuthChoice()}
@@ -2582,7 +2961,7 @@ export default function NeuroChat() {
       {screen === "admin-dashboard" && renderAdminDashboard()}
       {screen === "tips" && renderTips()}
       {screen === "howto" && renderHowTo()}
-      {toastMessage && (
+      {toastMessage ? (
         <div
           role="status"
           aria-live="polite"
@@ -2593,20 +2972,20 @@ export default function NeuroChat() {
             transform: "translateX(-50%)",
             maxWidth: 400,
             width: "calc(100% - 40px)",
-            background: colors.card,
-            border: `1px solid ${colors.border}`,
+            background: NC.card,
+            border: `1px solid ${NC.cardEdge}`,
             borderRadius: 14,
             padding: "12px 16px",
-            boxShadow: colors.shadowLg,
-            fontFamily: "'Nunito', sans-serif",
+            boxShadow: NC.shadowLg,
+            fontFamily: NC.sans,
             fontSize: 14,
-            color: colors.text,
+            color: NC.ink,
             zIndex: 9999,
           }}
         >
           {toastMessage}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

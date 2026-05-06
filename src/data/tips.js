@@ -6,7 +6,7 @@
 const BASE_TIPS = [
   {
     category: "Starting Conversations",
-    icon: "💬",
+    icon: "bubble",
     tips: [
       {
         title: "Open with something tiny",
@@ -36,7 +36,7 @@ const BASE_TIPS = [
   },
   {
     category: "Keeping It Going",
-    icon: "🔄",
+    icon: "bubbles",
     tips: [
       {
         title: "Swap yes/no for open prompts",
@@ -66,7 +66,7 @@ const BASE_TIPS = [
   },
   {
     category: "Ending Politely",
-    icon: "👋",
+    icon: "hand",
     tips: [
       {
         title: "Signal early you're winding down",
@@ -96,7 +96,7 @@ const BASE_TIPS = [
   },
   {
     category: "Tone & Delivery",
-    icon: "🎯",
+    icon: "spark",
     tips: [
       {
         title: "Match pace and volume loosely",
@@ -126,7 +126,7 @@ const BASE_TIPS = [
   },
   {
     category: "Difficult Moments",
-    icon: "⚡",
+    icon: "shield",
     tips: [
       {
         title: "Name your emotion without accusing",
@@ -156,7 +156,7 @@ const BASE_TIPS = [
   },
   {
     category: "Body Language & Non-Verbal Cues",
-    icon: "🫶",
+    icon: "heart",
     tips: [
       {
         title: "Orient your shoulders slightly toward them",
@@ -186,7 +186,7 @@ const BASE_TIPS = [
   },
   {
     category: "Digital Communication",
-    icon: "📱",
+    icon: "question",
     tips: [
       {
         title: "Lead with purpose in emails",
@@ -216,7 +216,7 @@ const BASE_TIPS = [
   },
   {
     category: "Self-Advocacy & Boundaries",
-    icon: "🛡️",
+    icon: "shield",
     tips: [
       {
         title: "Script one sentence requests",
@@ -248,7 +248,7 @@ const BASE_TIPS = [
 
 const ADVANCED_CONVERSATION = {
   category: "Advanced Conversation Techniques",
-  icon: "🎓",
+  icon: "trophy",
   unlockId: "tips-advanced-convo",
   tips: [
     {
@@ -276,7 +276,7 @@ const ADVANCED_CONVERSATION = {
 
 const CALM_UNDER_PRESSURE = {
   category: "Staying Calm Under Pressure",
-  icon: "🌊",
+  icon: "cloud",
   unlockId: "tips-calm-pressure",
   tips: [
     {
