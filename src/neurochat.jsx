@@ -25,6 +25,7 @@ import {
   Card,
   Chip,
   Toggle,
+  Bubble,
 } from "./components/nc/ui";
 import { ScenarioCard } from "./components/nc/ScenarioCard";
 import {
@@ -2949,18 +2950,18 @@ export default function NeuroChat() {
       {!isBootstrapping && screen === "auth-choice" && renderAuthChoice()}
       {!isBootstrapping && screen === "mood-checkin" && renderMoodCheckIn()}
       {!isBootstrapping && screen === "home" && renderHome()}
-      {screen === "scenarios" && renderScenarios()}
-      {screen === "chat" && renderChat()}
-      {screen === "feedback" && renderFeedback()}
-      {screen === "progress" && renderProgress()}
-      {screen === "history-review" && historyReview && renderHistoryReview()}
-      {screen === "prepare-tomorrow" && renderPrepareTomorrow()}
-      {screen === "custom-build" && renderCustomBuild()}
-      {screen === "settings" && renderSettings()}
-      {screen === "share-card" && renderShareCard()}
-      {screen === "admin-dashboard" && renderAdminDashboard()}
-      {screen === "tips" && renderTips()}
-      {screen === "howto" && renderHowTo()}
+      {!isBootstrapping && screen === "scenarios" && renderScenarios()}
+      {!isBootstrapping && screen === "chat" && renderChat()}
+      {!isBootstrapping && screen === "feedback" && renderFeedback()}
+      {!isBootstrapping && screen === "progress" && renderProgress()}
+      {!isBootstrapping && screen === "history-review" && historyReview && renderHistoryReview()}
+      {!isBootstrapping && screen === "prepare-tomorrow" && renderPrepareTomorrow()}
+      {!isBootstrapping && screen === "custom-build" && renderCustomBuild()}
+      {!isBootstrapping && screen === "settings" && renderSettings()}
+      {!isBootstrapping && screen === "share-card" && renderShareCard()}
+      {!isBootstrapping && screen === "admin-dashboard" && renderAdminDashboard()}
+      {!isBootstrapping && screen === "tips" && renderTips()}
+      {!isBootstrapping && screen === "howto" && renderHowTo()}
       {toastMessage ? (
         <div
           role="status"
