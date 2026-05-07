@@ -167,6 +167,7 @@ export default function NeuroChat() {
   const [toastMessage, setToastMessage] = useState(null);
   const toastTimersRef = useRef([]);
   const chatEndRef = useRef(null);
+  const moodRef = useRef(null);
   const maxTurns = 4;
 
   const tipsData = useMemo(() => getTipsCategories(unlockedContent), [unlockedContent]);
@@ -519,8 +520,16 @@ export default function NeuroChat() {
       setIsBootstrapping(false);
     });
 
-    const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
-      setAuthUser(session?.user ?? null);
+    const { data: subscription } = supabase.auth.onAuthStateChange((event, session) => {
+      const nextUser = session?.user ?? null;
+      setAuthUser(nextUser);
+      if (!nextUser) {
+        return;
+      }
+      setIsGuest(false);
+      if (event === "SIGNED_IN" || event === "INITIAL_SESSION" || event === "TOKEN_REFRESHED") {
+        setScreen(moodRef.current ? "home" : "mood-checkin");
+      }
     });
 
     return () => {
@@ -568,6 +577,10 @@ export default function NeuroChat() {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, typing]);
 
+  useEffect(() => {
+    moodRef.current = mood;
+  }, [mood]);
+
   const enterGuestMode = () => {
     setIsGuest(true);
     setHasChosenGuest(true);
@@ -612,7 +625,7 @@ export default function NeuroChat() {
     }
     setAuthSending(true);
     try {
-      const { error } =
+      const { data, error } =
         authMode === "signup"
           ? await supabase.auth.signUp({
               email: trimmed,
@@ -626,11 +639,43 @@ export default function NeuroChat() {
         setAuthError(mapAuthError(error, authMode));
         return;
       }
+      setAuthUser(data?.user ?? null);
+      setIsGuest(false);
+      setScreen(hasOnboarded && mood ? "home" : "mood-checkin");
       setPasswordInput("");
       setConfirmPasswordInput("");
       setAuthNotice(authMode === "signup" ? "Account created. You're now signed in." : "Welcome back.");
     } catch (err) {
       setAuthError(mapAuthError(err, authMode));
+    } finally {
+      setAuthSending(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    setAuthError("");
+    setAuthNotice("");
+    const trimmed = emailInput.trim();
+    if (!trimmed) {
+      setAuthError("Enter your email first, then tap Forgot password.");
+      return;
+    }
+    if (!supabase) {
+      setAuthError("Supabase is not configured, so password reset email can't be sent.");
+      return;
+    }
+    setAuthSending(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(trimmed, {
+        redirectTo: `${window.location.origin}/`,
+      });
+      if (error) {
+        setAuthError(mapAuthError(error, "login"));
+        return;
+      }
+      setAuthNotice("Password reset email sent. Check your inbox for next steps.");
+    } catch (err) {
+      setAuthError(err?.message || "Couldn't send reset email right now. Please try again.");
     } finally {
       setAuthSending(false);
     }
@@ -1392,6 +1437,26 @@ export default function NeuroChat() {
           <Body size={12} color={NC.inkMute} style={{ textAlign: "center", padding: "0 12px" }}>
             {authMode === "signup" ? "Create your NeuroChat account with email and password." : "Log in with your email and password."}
           </Body>
+          {authMode === "login" ? (
+            <button
+              type="button"
+              onClick={handleForgotPassword}
+              disabled={authSending}
+              style={{
+                background: "transparent",
+                border: "none",
+                color: NC.teal,
+                cursor: "pointer",
+                fontFamily: NC.sans,
+                fontSize: 13,
+                textDecoration: "underline",
+                padding: 0,
+                alignSelf: "center",
+              }}
+            >
+              Forgot password?
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={() => {
