@@ -57,6 +57,7 @@ const PREPARE_ENDPOINT = "/api/prepare";
 const EXPLAIN_ENDPOINT = "/api/explain";
 const ADMIN_ORG_ENDPOINT = "/api/admin/org";
 const STORAGE_KEY = "neurochat_guest_state_v2";
+const STAY_SIGNED_IN_KEY = "neurochat_stay_signed_in";
 
 const CORE_CATEGORIES = ["Work", "Social", "Everyday", "Difficult", "Relationships", "Self-Advocacy"];
 
@@ -110,6 +111,10 @@ function derivePracticeSignals(messages) {
 export default function NeuroChat() {
   const [isBootstrapping, setIsBootstrapping] = useState(true);
   const [emailInput, setEmailInput] = useState("");
+  const [passwordInput, setPasswordInput] = useState("");
+  const [confirmPasswordInput, setConfirmPasswordInput] = useState("");
+  const [authMode, setAuthMode] = useState("login");
+  const [staySignedIn, setStaySignedIn] = useState(true);
   const [authNotice, setAuthNotice] = useState("");
   const [authError, setAuthError] = useState("");
   const [authSending, setAuthSending] = useState(false);
@@ -213,6 +218,17 @@ export default function NeuroChat() {
 
   const hasConversationReview = unlockedContent.includes("feature-conversation-review");
   const hasCustomScenariosUnlock = unlockedContent.includes("feature-custom-scenarios");
+
+  function mapAuthError(error, mode) {
+    const msg = String(error?.message || "").toLowerCase();
+    if (msg.includes("invalid login credentials")) return "Incorrect email or password.";
+    if (msg.includes("email not confirmed")) return "Please confirm your email before logging in.";
+    if (msg.includes("user already registered")) return "That email is already in use. Try logging in instead.";
+    if (msg.includes("password should be at least")) return "Password must be at least 6 characters.";
+    if (msg.includes("unable to validate email address")) return "Please enter a valid email address.";
+    if (mode === "signup") return error?.message || "Couldn't create your account right now. Please try again.";
+    return error?.message || "Couldn't log in right now. Please try again.";
+  }
 
   const queueToasts = (messages) => {
     if (!messages?.length) return;
@@ -408,6 +424,15 @@ export default function NeuroChat() {
   }, [authUser?.id]);
 
   useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(STAY_SIGNED_IN_KEY);
+      if (saved === "false") setStaySignedIn(false);
+    } catch {
+      // Ignore storage issues and keep default behavior.
+    }
+  }, []);
+
+  useEffect(() => {
     if (!isSupabaseConfigured()) {
       const guestState = loadGuestState();
       if (!guestState?.hasOnboarded) {
@@ -425,6 +450,28 @@ export default function NeuroChat() {
     supabase.auth.getSession().then(async ({ data }) => {
       if (!active) return;
       const sessionUser = data.session?.user ?? null;
+      const shouldStaySignedIn = (() => {
+        try {
+          return window.localStorage.getItem(STAY_SIGNED_IN_KEY) !== "false";
+        } catch {
+          return true;
+        }
+      })();
+      if (!shouldStaySignedIn && sessionUser) {
+        await supabase.auth.signOut();
+        const guestState = loadGuestState();
+        setAuthUser(null);
+        setIsGuest(true);
+        if (!guestState?.hasOnboarded) {
+          setScreen("onboarding");
+        } else if (guestState?.hasChosenGuest) {
+          setScreen("mood-checkin");
+        } else {
+          setScreen("auth-choice");
+        }
+        setIsBootstrapping(false);
+        return;
+      }
       if (!sessionUser) {
         const guestState = loadGuestState();
         setIsGuest(true);
@@ -530,7 +577,7 @@ export default function NeuroChat() {
     saveGuestState({ hasChosenGuest: true, hasOnboarded: onboarded });
   };
 
-  const sendMagicLink = async () => {
+  const submitAuthForm = async () => {
     setAuthError("");
     setAuthNotice("");
     const trimmed = emailInput.trim();
@@ -538,25 +585,52 @@ export default function NeuroChat() {
       setAuthError("Please enter your email address.");
       return;
     }
+    if (!passwordInput.trim()) {
+      setAuthError("Please enter your password.");
+      return;
+    }
+    if (authMode === "signup") {
+      if (passwordInput.length < 6) {
+        setAuthError("Password must be at least 6 characters.");
+        return;
+      }
+      if (passwordInput !== confirmPasswordInput) {
+        setAuthError("Passwords do not match.");
+        return;
+      }
+    }
     if (!supabase) {
       setAuthError(
         "Supabase is not configured. Add SUPABASE_URL and SUPABASE_ANON_KEY (or VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY) to .env and restart npm run dev.",
       );
       return;
     }
+    try {
+      window.localStorage.setItem(STAY_SIGNED_IN_KEY, staySignedIn ? "true" : "false");
+    } catch {
+      // Ignore storage issues and continue with auth request.
+    }
     setAuthSending(true);
     try {
-      const { error } = await supabase.auth.signInWithOtp({
-        email: trimmed,
-        options: { emailRedirectTo: `${window.location.origin}/` },
-      });
+      const { error } =
+        authMode === "signup"
+          ? await supabase.auth.signUp({
+              email: trimmed,
+              password: passwordInput,
+            })
+          : await supabase.auth.signInWithPassword({
+              email: trimmed,
+              password: passwordInput,
+            });
       if (error) {
-        setAuthError(error.message || String(error));
+        setAuthError(mapAuthError(error, authMode));
         return;
       }
-      setAuthNotice("Magic link sent. Check your email to continue.");
+      setPasswordInput("");
+      setConfirmPasswordInput("");
+      setAuthNotice(authMode === "signup" ? "Account created. You're now signed in." : "Welcome back.");
     } catch (err) {
-      setAuthError(err?.message ?? "Network error — could not reach Supabase.");
+      setAuthError(mapAuthError(err, authMode));
     } finally {
       setAuthSending(false);
     }
@@ -1231,8 +1305,10 @@ export default function NeuroChat() {
             onChange={(e) => {
               setEmailInput(e.target.value);
               setAuthError("");
+              setAuthNotice("");
             }}
             placeholder="you@example.com"
+            type="email"
             disabled={authSending}
             style={{
               background: NC.card,
@@ -1246,12 +1322,100 @@ export default function NeuroChat() {
               boxSizing: "border-box",
             }}
           />
-          <PrimaryButton kind="ink" disabled={authSending} onClick={sendMagicLink}>
-            {authSending ? "Sending…" : "Continue with email"}
+          <input
+            value={passwordInput}
+            onChange={(e) => {
+              setPasswordInput(e.target.value);
+              setAuthError("");
+              setAuthNotice("");
+            }}
+            placeholder="Password"
+            type="password"
+            autoComplete={authMode === "signup" ? "new-password" : "current-password"}
+            disabled={authSending}
+            style={{
+              background: NC.card,
+              border: `1px solid ${NC.cardEdge}`,
+              borderRadius: 16,
+              padding: "16px 16px",
+              fontFamily: NC.sans,
+              fontSize: 15,
+              color: NC.ink,
+              width: "100%",
+              boxSizing: "border-box",
+            }}
+          />
+          {authMode === "signup" ? (
+            <input
+              value={confirmPasswordInput}
+              onChange={(e) => {
+                setConfirmPasswordInput(e.target.value);
+                setAuthError("");
+                setAuthNotice("");
+              }}
+              placeholder="Confirm password"
+              type="password"
+              autoComplete="new-password"
+              disabled={authSending}
+              style={{
+                background: NC.card,
+                border: `1px solid ${NC.cardEdge}`,
+                borderRadius: 16,
+                padding: "16px 16px",
+                fontFamily: NC.sans,
+                fontSize: 15,
+                color: NC.ink,
+                width: "100%",
+                boxSizing: "border-box",
+              }}
+            />
+          ) : null}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "2px 4px 0" }}>
+            <Body size={12} color={NC.inkMute}>
+              Stay signed in
+            </Body>
+            <Toggle
+              checked={staySignedIn}
+              onChange={(v) => {
+                setStaySignedIn(v);
+                try {
+                  window.localStorage.setItem(STAY_SIGNED_IN_KEY, v ? "true" : "false");
+                } catch {
+                  // Ignore localStorage write failures.
+                }
+              }}
+            />
+          </div>
+          <PrimaryButton kind="ink" disabled={authSending} onClick={submitAuthForm}>
+            {authSending ? (authMode === "signup" ? "Creating account…" : "Logging in…") : authMode === "signup" ? "Sign up" : "Log in"}
           </PrimaryButton>
           <Body size={12} color={NC.inkMute} style={{ textAlign: "center", padding: "0 12px" }}>
-            We&apos;ll send a magic link. Works for new and existing accounts.
+            {authMode === "signup" ? "Create your NeuroChat account with email and password." : "Log in with your email and password."}
           </Body>
+          <button
+            type="button"
+            onClick={() => {
+              setAuthMode((prev) => (prev === "signup" ? "login" : "signup"));
+              setPasswordInput("");
+              setConfirmPasswordInput("");
+              setAuthError("");
+              setAuthNotice("");
+            }}
+            disabled={authSending}
+            style={{
+              background: "transparent",
+              border: "none",
+              color: NC.teal,
+              cursor: "pointer",
+              fontFamily: NC.sans,
+              fontSize: 13,
+              textDecoration: "underline",
+              padding: 0,
+              alignSelf: "center",
+            }}
+          >
+            {authMode === "signup" ? "Already have an account? Log in" : "New here? Sign up"}
+          </button>
           {authError ? (
             <p role="alert" style={{ fontSize: 13, color: NC.terracotta, background: NC.terracottaSoft, borderRadius: 12, padding: "10px 12px", margin: 0 }}>
               {authError}
