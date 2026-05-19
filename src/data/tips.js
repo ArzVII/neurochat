@@ -294,15 +294,15 @@ const CALM_UNDER_PRESSURE = {
   ],
 };
 
-/** @param {string[]} unlockedContent */
-export function getTipsCategories(unlockedContent = []) {
+/** @param {string[]} unlockedContent @param {boolean} isPremium */
+export function getTipsCategories(unlockedContent = [], isPremium = false) {
   const unlocked = new Set(unlockedContent || []);
   const out = [...BASE_TIPS];
-  if (unlocked.has(ADVANCED_CONVERSATION.unlockId)) {
+  if (isPremium && unlocked.has(ADVANCED_CONVERSATION.unlockId)) {
     const { unlockId: _, ...rest } = ADVANCED_CONVERSATION;
     out.push(rest);
   }
-  if (unlocked.has(CALM_UNDER_PRESSURE.unlockId)) {
+  if (isPremium && unlocked.has(CALM_UNDER_PRESSURE.unlockId)) {
     const { unlockId: _, ...rest } = CALM_UNDER_PRESSURE;
     out.push(rest);
   }

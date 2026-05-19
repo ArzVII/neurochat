@@ -28,6 +28,14 @@ import {
   Bubble,
 } from "./components/nc/ui";
 import { ScenarioCard } from "./components/nc/ScenarioCard";
+import { UpgradePrompt } from "./components/UpgradePrompt";
+import { InstallPrompt } from "./components/InstallPrompt";
+import {
+  PREMIUM_FEATURES,
+  readPremiumLocal,
+  writePremiumLocal,
+} from "./lib/subscription";
+import { navigateTo } from "./lib/routing";
 import {
   SecondaryTile,
   FilterPill,
@@ -164,17 +172,26 @@ export default function NeuroChat() {
   const [explainIdx, setExplainIdx] = useState(null);
   const [explainText, setExplainText] = useState("");
   const [explainLoading, setExplainLoading] = useState(false);
+  const [isPremium, setIsPremium] = useState(() => readPremiumLocal());
+  const [activeUpgradeFeature, setActiveUpgradeFeature] = useState(null);
+  const [isOnline, setIsOnline] = useState(
+    () => typeof navigator !== "undefined" && navigator.onLine !== false,
+  );
   const [toastMessage, setToastMessage] = useState(null);
   const toastTimersRef = useRef([]);
   const chatEndRef = useRef(null);
   const moodRef = useRef(null);
   const maxTurns = 4;
 
-  const tipsData = useMemo(() => getTipsCategories(unlockedContent), [unlockedContent]);
+  const tipsData = useMemo(() => getTipsCategories(unlockedContent, isPremium), [unlockedContent, isPremium]);
 
   const visibleScenarios = useMemo(
-    () => SCENARIOS.filter((s) => !s.requiresUnlock || unlockedContent.includes(s.requiresUnlock)),
-    [unlockedContent],
+    () =>
+      SCENARIOS.filter((s) => {
+        if (!s.requiresUnlock) return true;
+        return isPremium && unlockedContent.includes(s.requiresUnlock);
+      }),
+    [unlockedContent, isPremium],
   );
 
   const customAsScenarios = useMemo(
@@ -217,8 +234,14 @@ export default function NeuroChat() {
     });
   }, [guestSessions, sessionRecords]);
 
-  const hasConversationReview = unlockedContent.includes("feature-conversation-review");
-  const hasCustomScenariosUnlock = unlockedContent.includes("feature-custom-scenarios");
+  const gatePremium = (featureKey, onAllowed) => {
+    if (isPremium) {
+      onAllowed();
+      return true;
+    }
+    setActiveUpgradeFeature(featureKey);
+    return false;
+  };
 
   function mapAuthError(error, mode) {
     const msg = String(error?.message || "").toLowerCase();
@@ -493,7 +516,7 @@ export default function NeuroChat() {
       const [profileResult, progressResult] = await Promise.all([
         supabase
           .from("profiles")
-          .select("has_onboarded,mood_history,last_mood,prepare_plan,show_hints,pacing_mode")
+          .select("has_onboarded,mood_history,last_mood,prepare_plan,show_hints,pacing_mode,is_premium")
           .eq("id", sessionUser.id)
           .maybeSingle(),
         supabase
@@ -510,6 +533,9 @@ export default function NeuroChat() {
       setPreparePlan(profile?.prepare_plan ?? null);
       setShowHintsInChat(profile?.show_hints !== false);
       setPacingMode(profile?.pacing_mode === true);
+      const premium = Boolean(profile?.is_premium) || readPremiumLocal();
+      setIsPremium(premium);
+      writePremiumLocal(premium);
       setMood(profile?.last_mood ?? null);
       setMoodHistory(Array.isArray(profile?.mood_history) ? profile.mood_history : []);
       setCompletedScenarios(Array.isArray(progress?.completed_scenarios) ? progress.completed_scenarios : []);
@@ -561,10 +587,10 @@ export default function NeuroChat() {
   }, [authUser?.id, screen, progressTab]);
 
   useEffect(() => {
-    if (!hasConversationReview && progressTab === "history") {
+    if (!isPremium && progressTab === "history") {
       setProgressTab("overview");
     }
-  }, [hasConversationReview, progressTab]);
+  }, [isPremium, progressTab]);
 
   useEffect(() => {
     if (screen !== "chat") {
@@ -580,6 +606,17 @@ export default function NeuroChat() {
   useEffect(() => {
     moodRef.current = mood;
   }, [mood]);
+
+  useEffect(() => {
+    const onOnline = () => setIsOnline(true);
+    const onOffline = () => setIsOnline(false);
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+    return () => {
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
+    };
+  }, []);
 
   const enterGuestMode = () => {
     setIsGuest(true);
@@ -735,6 +772,7 @@ export default function NeuroChat() {
           body: JSON.stringify({
             scenario: selectedScenario,
             messages: newMessages,
+            tier: isPremium ? "premium" : "basic",
           }),
         });
 
@@ -748,6 +786,10 @@ export default function NeuroChat() {
           explore: Array.isArray(aiFeedback.explore) ? aiFeedback.explore : [],
           examples: Array.isArray(aiFeedback.examples) ? aiFeedback.examples : [],
         };
+        if (!isPremium) {
+          resolvedFeedback.explore = resolvedFeedback.explore.slice(0, 1);
+          resolvedFeedback.examples = [];
+        }
         setFeedback(resolvedFeedback);
       } catch (error) {
         console.error(error);
@@ -759,7 +801,7 @@ export default function NeuroChat() {
         resolvedFeedback = {
           strengths: ["You showed up and practised a real conversation - that is meaningful progress."],
           explore: ["Feedback is temporarily unavailable. Try again in a moment for detailed coaching insights."],
-          examples: fallbackExamples,
+          examples: isPremium ? fallbackExamples : [],
         };
         setFeedback(resolvedFeedback);
       } finally {
@@ -785,38 +827,22 @@ export default function NeuroChat() {
         if (uniq >= 3) {
           addUnlock(
             "bonus-pack-1",
-            "You've unlocked 3 bonus scenarios — find them in the scenario list.",
+            "You've earned 3 bonus scenarios — available with Premium in the scenario list.",
           );
         }
         if (uniq >= 5) {
           addUnlock(
             "tips-advanced-convo",
-            "You've unlocked Advanced Conversation Techniques — open Tips Library.",
+            "You've earned Advanced Conversation Techniques — open Tips Library with Premium.",
           );
         }
         const hadPriorDifficult = priorCompleted.some((sid) => scenarioById(sid)?.category === "Difficult");
         if (selectedScenario.category === "Difficult" && !hadPriorDifficult) {
           addUnlock(
             "tips-calm-pressure",
-            "You've unlocked Staying Calm Under Pressure — open Tips Library.",
+            "You've earned Staying Calm Under Pressure — open Tips Library with Premium.",
           );
         }
-        const coreCatsCovered = CORE_CATEGORIES.every((cat) =>
-          updatedCompleted.some((sid) => scenarioById(sid)?.category === cat),
-        );
-        if (coreCatsCovered) {
-          addUnlock(
-            "feature-custom-scenarios",
-            "You've unlocked Custom Scenario Builder — create situations from your real life under Choose a Scenario.",
-          );
-        }
-        if (nextTotalSessions >= 10) {
-          addUnlock(
-            "feature-conversation-review",
-            "You've unlocked Conversation History — review past sessions under Progress → History.",
-          );
-        }
-
         const earnedSignals = [];
         if (userMsgs.length >= 1) earnedSignals.push("first-steps");
         if (hasQuestion) earnedSignals.push("curious");
@@ -876,7 +902,7 @@ export default function NeuroChat() {
           setGuestSessions((prev) => [guestEntry, ...prev]);
         }
 
-        if (authUser?.id) {
+        if (authUser?.id && isPremium) {
           setSessionSaving(true);
           try {
             await fetch(SAVE_SESSION_ENDPOINT, {
@@ -1008,6 +1034,10 @@ export default function NeuroChat() {
   };
 
   const persistPacingMode = async (next) => {
+    if (next && !isPremium) {
+      setActiveUpgradeFeature(PREMIUM_FEATURES.pacing);
+      return;
+    }
     setPacingMode(next);
     if (isGuest) {
       saveGuestState({ guestPacingMode: next });
@@ -1051,6 +1081,10 @@ export default function NeuroChat() {
 
   const runPreparePlan = async () => {
     if (!prepareDraft.eventTitle.trim()) return;
+    if (!isPremium) {
+      setActiveUpgradeFeature(PREMIUM_FEATURES.prepareTomorrow);
+      return;
+    }
     setPrepareBusy(true);
     try {
       const summaries = practiceScenarioList.map((s) => `${s.id}: ${s.title} (${s.category})`);
@@ -1084,6 +1118,10 @@ export default function NeuroChat() {
 
   const generateCustomScenario = async () => {
     if (!customDraft.trim()) return;
+    if (!isPremium) {
+      setActiveUpgradeFeature(PREMIUM_FEATURES.customScenarios);
+      return;
+    }
     setCustomBusy(true);
     try {
       const r = await fetch(CUSTOM_SCENARIO_GEN_ENDPOINT, {
@@ -1299,6 +1337,10 @@ export default function NeuroChat() {
   };
 
   const fetchAiExplanation = async (aiLine, idx) => {
+    if (!isPremium) {
+      setActiveUpgradeFeature(PREMIUM_FEATURES.socialExplainer);
+      return;
+    }
     if (explainIdx === idx) {
       setExplainIdx(null);
       setExplainText("");
@@ -1797,7 +1839,7 @@ export default function NeuroChat() {
               desc="Plan a real event"
               tone={NC.tealSoft}
               ink="#3D6A72"
-              onClick={() => setScreen("prepare-tomorrow")}
+              onClick={() => gatePremium(PREMIUM_FEATURES.prepareTomorrow, () => setScreen("prepare-tomorrow"))}
             />
             <SecondaryTile
               icon={NCIcon.chart(20)}
@@ -1995,22 +2037,23 @@ export default function NeuroChat() {
         ) : null}
 
         <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
-          <GhostButton onClick={() => setScreen("prepare-tomorrow")} style={{ minHeight: 48, fontSize: 14 }}>
+          <GhostButton
+            onClick={() => gatePremium(PREMIUM_FEATURES.prepareTomorrow, () => setScreen("prepare-tomorrow"))}
+            style={{ minHeight: 48, fontSize: 14 }}
+          >
             <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
               {NCIcon.calendar(18)} Prepare for Tomorrow — plan a real event
             </span>
           </GhostButton>
-          {hasCustomScenariosUnlock ? (
-            <PrimaryButton kind="butter" onClick={() => setScreen("custom-build")} style={{ minHeight: 48, fontSize: 14 }}>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                {NCIcon.spark(18)} Create Custom Scenario
-              </span>
-            </PrimaryButton>
-          ) : (
-            <Body size={12} color={NC.inkMute} style={{ padding: "4px 2px" }}>
-              Complete one scenario in each core category to unlock Custom Scenarios.
-            </Body>
-          )}
+          <PrimaryButton
+            kind="butter"
+            onClick={() => gatePremium(PREMIUM_FEATURES.customScenarios, () => setScreen("custom-build"))}
+            style={{ minHeight: 48, fontSize: 14 }}
+          >
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+              {NCIcon.spark(18)} Create Custom Scenario
+            </span>
+          </PrimaryButton>
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -2376,7 +2419,7 @@ export default function NeuroChat() {
               </FeedbackCard>
             ) : null}
 
-            {feedback.examples.length > 0 ? (
+            {isPremium && feedback.examples.length > 0 ? (
               <FeedbackCard tone={NC.tealSoft} ink="#3D6A72" border={NC.teal} title="Other ways to say it" eyebrow="Phrasing" compact>
                 {feedback.examples.map((s, i) => (
                   <div key={i} style={{ fontFamily: NC.serif, fontStyle: "italic", fontSize: 14, color: NC.ink, lineHeight: 1.4 }}>
@@ -2384,6 +2427,9 @@ export default function NeuroChat() {
                   </div>
                 ))}
               </FeedbackCard>
+            ) : null}
+            {!isPremium ? (
+              <UpgradePrompt featureKey={PREMIUM_FEATURES.detailedFeedback} onDismiss={() => setActiveUpgradeFeature(null)} />
             ) : null}
           </div>
 
@@ -2489,30 +2535,27 @@ export default function NeuroChat() {
             >
               Overview
             </button>
-            {hasConversationReview ? (
-              <button
-                type="button"
-                onClick={() => setProgressTab("history")}
-                style={{
-                  flex: 1,
-                  padding: "10px 12px",
-                  fontSize: 14,
-                  borderRadius: 12,
-                  fontFamily: NC.sans,
-                  fontWeight: 500,
-                  cursor: "pointer",
-                  border: `1px solid ${progressTab === "history" ? NC.ink : NC.cardEdge}`,
-                  background: progressTab === "history" ? NC.ink : NC.card,
-                  color: progressTab === "history" ? NC.paper : NC.ink,
-                }}
-              >
-                History
-              </button>
-            ) : (
-              <div style={{ flex: 1, fontSize: 11, color: NC.inkMute, alignSelf: "center", paddingLeft: 6 }} title="Complete 10 sessions to unlock conversation history.">
-                History locks after 10 sessions
-              </div>
-            )}
+            <button
+              type="button"
+              onClick={() => {
+                if (isPremium) setProgressTab("history");
+                else setActiveUpgradeFeature(PREMIUM_FEATURES.conversationHistory);
+              }}
+              style={{
+                flex: 1,
+                padding: "10px 12px",
+                fontSize: 14,
+                borderRadius: 12,
+                fontFamily: NC.sans,
+                fontWeight: 500,
+                cursor: "pointer",
+                border: `1px solid ${progressTab === "history" ? NC.ink : NC.cardEdge}`,
+                background: progressTab === "history" ? NC.ink : NC.card,
+                color: progressTab === "history" ? NC.paper : NC.ink,
+              }}
+            >
+              History
+            </button>
           </div>
 
           {progressTab === "overview" ? (
@@ -2557,7 +2600,7 @@ export default function NeuroChat() {
                 </div>
               )}
             </>
-          ) : (
+          ) : isPremium ? (
             <div>
               <Body size={14} color={NC.inkMute} style={{ marginBottom: 14 }}>
                 Open a past session to re-read the transcript and coaching feedback.
@@ -2614,6 +2657,11 @@ export default function NeuroChat() {
                 </div>
               )}
             </div>
+          ) : (
+            <UpgradePrompt
+              featureKey={PREMIUM_FEATURES.conversationHistory}
+              onDismiss={() => setActiveUpgradeFeature(null)}
+            />
           )}
         </ScreenColumn>
       </Paper>
@@ -2840,8 +2888,29 @@ export default function NeuroChat() {
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+          <SettingsGroup title="NeuroChat Premium">
+            <SettingsRow label="Your plan" hint={isPremium ? "Premium active" : "Free — full practice included"} isFirst>
+              <button
+                type="button"
+                onClick={() => navigateTo("/#pricing")}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: NC.teal,
+                  fontFamily: NC.sans,
+                  fontSize: 13,
+                  textDecoration: "underline",
+                  cursor: "pointer",
+                  padding: 0,
+                }}
+              >
+                {isPremium ? "Manage" : "View plans"}
+              </button>
+            </SettingsRow>
+          </SettingsGroup>
+
           <SettingsGroup title="Comfort">
-            <SettingsRow label="Give me more time to think" hint="Hides the turn dots, keeps suggestions visible." isFirst>
+            <SettingsRow label="Give me more time to think" hint={isPremium ? "Hides the turn dots." : "Premium feature"} isFirst>
               <Toggle checked={pacingMode} onChange={(v) => persistPacingMode(v)} />
             </SettingsRow>
             <SettingsRow label="Show social cue hints" hint="Adds a small ‘what just happened?’ under AI replies.">
@@ -2861,6 +2930,26 @@ export default function NeuroChat() {
               )}
             </SettingsRow>
             <SettingsRow label="Member since" hint={authUser?.created_at ? formatDateShort(authUser.created_at) : "—"} />
+          </SettingsGroup>
+
+          <SettingsGroup title="Legal">
+            <SettingsRow label="Privacy policy" hint="Plain-language GDPR summary" isFirst>
+              <button
+                type="button"
+                onClick={() => navigateTo("/privacy")}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: NC.teal,
+                  fontFamily: NC.sans,
+                  fontSize: 13,
+                  cursor: "pointer",
+                  padding: 0,
+                }}
+              >
+                Read
+              </button>
+            </SettingsRow>
           </SettingsGroup>
 
           <div>
@@ -3216,6 +3305,45 @@ export default function NeuroChat() {
           {toastMessage}
         </div>
       ) : null}
+      {!isOnline ? (
+        <div
+          role="status"
+          style={{
+            position: "fixed",
+            top: toastMessage ? 56 : 12,
+            left: "50%",
+            transform: "translateX(-50%)",
+            maxWidth: 400,
+            width: "calc(100% - 40px)",
+            background: NC.butterSoft,
+            border: `1px solid ${NC.cardEdge}`,
+            borderRadius: 12,
+            padding: "10px 14px",
+            fontFamily: NC.sans,
+            fontSize: 13,
+            color: NC.inkSoft,
+            zIndex: 9998,
+            textAlign: "center",
+          }}
+        >
+          You&apos;re offline — cached pages still work. AI features need a connection.
+        </div>
+      ) : null}
+      {!isPremium && activeUpgradeFeature && screen !== "feedback" ? (
+        <div
+          style={{
+            position: "fixed",
+            bottom: 16,
+            left: "50%",
+            transform: "translateX(-50%)",
+            width: "min(400px, calc(100% - 32px))",
+            zIndex: 9997,
+          }}
+        >
+          <UpgradePrompt featureKey={activeUpgradeFeature} onDismiss={() => setActiveUpgradeFeature(null)} />
+        </div>
+      ) : null}
+      <InstallPrompt />
     </div>
   );
 }

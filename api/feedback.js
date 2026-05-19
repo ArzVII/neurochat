@@ -41,7 +41,8 @@ export default async function handler(req, res) {
 
   try {
     const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body ?? {};
-    const { scenario, messages } = body;
+    const { scenario, messages, tier } = body;
+    const isPremium = tier === "premium";
 
     if (!scenario || !Array.isArray(messages) || messages.length === 0) {
       return res.status(400).json({ error: "scenario and non-empty messages[] are required" });
@@ -52,16 +53,27 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: "Server missing ANTHROPIC_API_KEY" });
     }
 
-    const systemPrompt = [
-      "You are a supportive social skills coach analysing a practice conversation.",
-      "The user is neurodivergent.",
-      "Always lead with genuine strengths first, then give 1-2 gentle areas to explore.",
-      "Be honest but kind - if the user was rude, dismissive, or abrupt, mention it gently as something to explore, do not ignore it.",
-      "Also suggest 2 example responses that would work well in this scenario.",
-      "Return JSON with this exact structure: { strengths: string[], explore: string[], examples: string[] }.",
-      "Keep language warm, plain, and non-judgmental.",
-      "Return JSON only. No markdown fences. No extra keys.",
-    ].join("\n");
+    const systemPrompt = isPremium
+      ? [
+          "You are a supportive social skills coach analysing a practice conversation.",
+          "The user is neurodivergent.",
+          "Always lead with genuine strengths first, then give 1-2 gentle areas to explore.",
+          "Be honest but kind - if the user was rude, dismissive, or abrupt, mention it gently as something to explore, do not ignore it.",
+          "Also suggest 2 example responses that would work well in this scenario.",
+          "Return JSON with this exact structure: { strengths: string[], explore: string[], examples: string[] }.",
+          "Keep language warm, plain, and non-judgmental.",
+          "Return JSON only. No markdown fences. No extra keys.",
+        ].join("\n")
+      : [
+          "You are a supportive social skills coach analysing a practice conversation.",
+          "The user is neurodivergent.",
+          "Always lead with genuine strengths first.",
+          "Then give exactly ONE gentle area to explore (a single short sentence in the explore array).",
+          "Do not include example phrases — return an empty examples array.",
+          "Return JSON with this exact structure: { strengths: string[], explore: string[], examples: string[] }.",
+          "Keep language warm, plain, and non-judgmental.",
+          "Return JSON only. No markdown fences. No extra keys.",
+        ].join("\n");
 
     const anthropicResponse = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -72,7 +84,7 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         model: "claude-sonnet-4-6",
-        max_tokens: 700,
+        max_tokens: isPremium ? 700 : 400,
         system: systemPrompt,
         messages: [
           {
@@ -106,6 +118,11 @@ export default async function handler(req, res) {
     } catch {
       console.error("Failed to parse Claude feedback JSON:", text);
       return res.status(502).json({ error: "Claude returned invalid feedback format" });
+    }
+
+    if (!isPremium) {
+      feedback.explore = feedback.explore.slice(0, 1);
+      feedback.examples = [];
     }
 
     return res.status(200).json(feedback);
