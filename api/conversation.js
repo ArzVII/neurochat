@@ -26,11 +26,17 @@ function toClaudeMessages(messages) {
 }
 
 export default async function handler(req, res) {
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
+  console.error("[conversation] handler invoked", {
+    method: req?.method,
+    url: req?.url,
+    at: new Date().toISOString(),
+  });
 
   try {
+    if (req.method !== "POST") {
+      return res.status(405).json({ error: "Method not allowed" });
+    }
+
     const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body ?? {};
     const { scenario, messages } = body;
 
@@ -38,8 +44,9 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "scenario and non-empty messages[] are required" });
     }
 
-    const apiKey = process.env.ANTHROPIC_API_KEY;
+    const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
     if (!apiKey) {
+      console.error("[conversation] ANTHROPIC_API_KEY is not set");
       return res.status(500).json({ error: "Server missing ANTHROPIC_API_KEY" });
     }
 
@@ -60,8 +67,11 @@ export default async function handler(req, res) {
 
     if (!anthropicResponse.ok) {
       const errorText = await anthropicResponse.text();
-      console.error("Anthropic API error:", errorText);
-      return res.status(502).json({ error: "Anthropic API request failed" });
+      console.error("[conversation] Anthropic API error:", errorText);
+      return res.status(502).json({
+        error: "Anthropic API request failed",
+        detail: errorText,
+      });
     }
 
     const claudeResponse = await anthropicResponse.json();
@@ -78,7 +88,11 @@ export default async function handler(req, res) {
 
     return res.status(200).json({ reply: text });
   } catch (error) {
-    console.error("Conversation endpoint failed:", error);
-    return res.status(500).json({ error: "Failed to generate conversation response" });
+    const detail = error instanceof Error ? error.message : String(error);
+    console.error("[conversation] unhandled error:", error);
+    return res.status(500).json({
+      error: "Failed to generate conversation response",
+      detail,
+    });
   }
 }
