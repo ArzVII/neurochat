@@ -135,22 +135,37 @@ export default function Landing() {
 
         <section id="pricing" style={{ marginBottom: 56 }}>
           <h2 style={siteH2}>Pricing</h2>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16 }}>
+          <p style={{ fontFamily: NC.mono, fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", color: NC.inkMute, margin: "0 0 12px" }}>
+            Individual
+          </p>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 16, marginBottom: 24 }}>
             <div style={siteCard}>
-              <p style={{ fontFamily: NC.mono, fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", color: NC.inkMute, margin: "0 0 8px" }}>
-                Individual
-              </p>
-              <p style={{ fontFamily: NC.serif, fontSize: 28, margin: "0 0 4px" }}>Free</p>
-              <p style={{ fontSize: 14, color: NC.inkMute, marginBottom: 16 }}>Unlimited core practice</p>
-              <p style={{ fontFamily: NC.serif, fontSize: 28, margin: "16px 0 4px" }}>
-                {PRICING.monthly}
-                <span style={{ fontSize: 15, fontFamily: NC.sans, color: NC.inkMute }}>/month</span>
-              </p>
-              <p style={{ fontSize: 14, color: NC.inkSoft, marginBottom: 8 }}>or {PRICING.yearly}/year for Premium</p>
-              <p style={{ fontSize: 13, color: NC.inkMute, lineHeight: 1.55 }}>
-                Payments coming soon. Premium unlocks detailed feedback, history, custom scenarios, and more.
+              <p style={{ fontFamily: NC.serif, fontSize: 28, margin: "0 0 8px" }}>Free</p>
+              <p style={{ fontSize: 15, color: NC.inkSoft, margin: 0, lineHeight: 1.55 }}>
+                Unlimited core practice — all 29 scenarios, full conversations, basic feedback, tips library, and mood check-in.
               </p>
             </div>
+            <div style={{ ...siteCard, background: NC.tealSoft }}>
+              <p style={{ fontFamily: NC.serif, fontSize: 28, margin: "0 0 4px" }}>
+                Premium
+              </p>
+              <p style={{ fontFamily: NC.serif, fontSize: 22, margin: "0 0 8px", color: NC.ink }}>
+                {PRICING.monthly}
+                <span style={{ fontSize: 15, fontFamily: NC.sans, color: NC.inkMute }}>/month</span>
+                <span style={{ fontSize: 15, fontFamily: NC.sans, color: NC.inkMute }}> or {PRICING.yearly}/year</span>
+              </p>
+              <p style={{ fontSize: 14, color: NC.inkSoft, margin: "0 0 8px", lineHeight: 1.55 }}>
+                Detailed feedback, custom scenarios, conversation history, Prepare for Tomorrow, pacing controls, and bonus content.
+              </p>
+              <p style={{ fontSize: 13, color: NC.inkMute, margin: 0, lineHeight: 1.55 }}>
+                Payments coming soon.
+              </p>
+            </div>
+          </div>
+          <p style={{ fontFamily: NC.mono, fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", color: NC.inkMute, margin: "0 0 12px" }}>
+            Institutional
+          </p>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16 }}>
             <div style={siteCard}>
               <p style={{ fontFamily: NC.mono, fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", color: NC.inkMute, margin: "0 0 8px" }}>
                 Therapist licence
