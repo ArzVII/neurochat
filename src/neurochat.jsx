@@ -66,6 +66,11 @@ const EXPLAIN_ENDPOINT = "/api/explain";
 const ADMIN_ORG_ENDPOINT = "/api/admin/org";
 const STORAGE_KEY = "neurochat_guest_state_v2";
 const STAY_SIGNED_IN_KEY = "neurochat_stay_signed_in";
+const API_ORIGIN = typeof window !== "undefined" ? window.location.origin : "";
+
+function apiUrl(path) {
+  return `${API_ORIGIN}${path}`;
+}
 
 const CORE_CATEGORIES = ["Work", "Social", "Everyday", "Difficult", "Relationships", "Self-Advocacy"];
 
@@ -368,7 +373,7 @@ export default function NeuroChat() {
   }) => {
     if (!authUser?.id) return;
     try {
-      await fetch(PROGRESS_ENDPOINT, {
+      await fetch(apiUrl(PROGRESS_ENDPOINT), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -430,7 +435,7 @@ export default function NeuroChat() {
     let cancelled = false;
     (async () => {
       try {
-        const r = await fetch(CUSTOM_SCENARIOS_LIST_ENDPOINT, {
+        const r = await fetch(apiUrl(CUSTOM_SCENARIOS_LIST_ENDPOINT), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ userId: authUser.id }),
@@ -569,7 +574,7 @@ export default function NeuroChat() {
     let cancelled = false;
     (async () => {
       try {
-        const r = await fetch(SESSIONS_LIST_ENDPOINT, {
+        const r = await fetch(apiUrl(SESSIONS_LIST_ENDPOINT), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ userId: authUser.id }),
@@ -764,7 +769,7 @@ export default function NeuroChat() {
       setFeedbackLoading(true);
       let resolvedFeedback = null;
       try {
-        const response = await fetch(FEEDBACK_ENDPOINT, {
+        const response = await fetch(apiUrl(FEEDBACK_ENDPOINT), {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -905,7 +910,7 @@ export default function NeuroChat() {
         if (authUser?.id && isPremium) {
           setSessionSaving(true);
           try {
-            await fetch(SAVE_SESSION_ENDPOINT, {
+            await fetch(apiUrl(SAVE_SESSION_ENDPOINT), {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
@@ -938,7 +943,7 @@ export default function NeuroChat() {
     } else {
       setTyping(true);
       try {
-        const response = await fetch(CONVERSATION_ENDPOINT, {
+        const response = await fetch(apiUrl(CONVERSATION_ENDPOINT), {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -950,7 +955,9 @@ export default function NeuroChat() {
         });
 
         if (!response.ok) {
-          throw new Error("Conversation API request failed");
+          const errText = await response.text().catch(() => "");
+          console.error("Conversation API failed:", response.status, errText);
+          throw new Error(`Conversation API request failed (${response.status})`);
         }
 
         const data = await response.json();
@@ -1088,7 +1095,7 @@ export default function NeuroChat() {
     setPrepareBusy(true);
     try {
       const summaries = practiceScenarioList.map((s) => `${s.id}: ${s.title} (${s.category})`);
-      const r = await fetch(PREPARE_ENDPOINT, {
+      const r = await fetch(apiUrl(PREPARE_ENDPOINT), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1124,7 +1131,7 @@ export default function NeuroChat() {
     }
     setCustomBusy(true);
     try {
-      const r = await fetch(CUSTOM_SCENARIO_GEN_ENDPOINT, {
+      const r = await fetch(apiUrl(CUSTOM_SCENARIO_GEN_ENDPOINT), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ description: customDraft.trim() }),
@@ -1154,7 +1161,7 @@ export default function NeuroChat() {
     if (!generatedCustomScenario) return;
     try {
       if (authUser?.id) {
-        const r = await fetch(CUSTOM_SCENARIOS_SAVE_ENDPOINT, {
+        const r = await fetch(apiUrl(CUSTOM_SCENARIOS_SAVE_ENDPOINT), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -1207,7 +1214,7 @@ export default function NeuroChat() {
     try {
       const id = row?.id;
       if (authUser?.id && id && String(id).startsWith("guest-") === false) {
-        await fetch(SESSION_DELETE_ENDPOINT, {
+        await fetch(apiUrl(SESSION_DELETE_ENDPOINT), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ userId: authUser.id, sessionId: id }),
@@ -1321,7 +1328,7 @@ export default function NeuroChat() {
     setAdminLoading(true);
     setAdminError("");
     try {
-      const r = await fetch(`${ADMIN_ORG_ENDPOINT}/${encodeURIComponent(adminOrgIdInput.trim())}`);
+      const r = await fetch(apiUrl(`${ADMIN_ORG_ENDPOINT}/${encodeURIComponent(adminOrgIdInput.trim())}`));
       if (!r.ok) {
         const payload = await r.json().catch(() => ({}));
         throw new Error(payload.error || "Failed to load dashboard");
@@ -1350,7 +1357,7 @@ export default function NeuroChat() {
     setExplainIdx(idx);
     setExplainText("");
     try {
-      const r = await fetch(EXPLAIN_ENDPOINT, {
+      const r = await fetch(apiUrl(EXPLAIN_ENDPOINT), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
